@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { Example } from '../modules/example/entities/example.entity';
+import { Example } from '@modules/example/entities/example.entity';
 
 export default new DataSource({
   type: 'mysql',

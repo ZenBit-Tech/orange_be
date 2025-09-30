@@ -3,10 +3,8 @@ import {
   Get,
   Post,
   Body,
-  Param,
-  Delete,
-  Put,
 } from '@nestjs/common';
+import { ExampleResponseDto } from './dto/response-example.dto';
 import { ExampleService } from './example.service';
 import { CreateExampleDto } from './dto/create-example.dto';
 import { ApiTags, ApiResponse } from '@nestjs/swagger';
@@ -18,13 +16,13 @@ export class ExampleController {
 
   @Post()
   @ApiResponse({ status: 201, description: 'Example created.' })
-  create(@Body() dto: CreateExampleDto) {
+  create(@Body() dto: CreateExampleDto): Promise<ExampleResponseDto>  {
     return this.exampleService.create(dto);
   }
 
   @Get()
   @ApiResponse({ status: 200, description: 'Get all examples.' })
-  findAll() {
+  findAll(): Promise<ExampleResponseDto[]> {
     return this.exampleService.findAll();
   }
 }
