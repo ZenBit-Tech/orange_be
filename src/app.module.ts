@@ -4,6 +4,9 @@ import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { databaseConfig } from './config/database.config';
 import { ExampleModule } from '@modules/example/example.module';
 import { UserModule } from './modules/user/user.module';
+import { GoogleStrategy } from '@modules/auth/strategies/google-strategy';
+import googleOauthConfig from '@config/google-oauth.config';
+import { AuthModule } from '@modules/auth/auth.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -12,7 +15,7 @@ type AppConfig = {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig],
+      load: [databaseConfig, googleOauthConfig],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -28,6 +31,9 @@ type AppConfig = {
     ExampleModule,
 
     UserModule,
+
+    AuthModule,
   ],
+  providers: [GoogleStrategy],
 })
 export class AppModule {}

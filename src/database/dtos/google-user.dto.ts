@@ -1,11 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUrl,
-} from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class GoogleUserDto {
   @ApiProperty({
@@ -22,7 +16,7 @@ export class GoogleUserDto {
   })
   @IsEmail()
   @IsNotEmpty()
-  email: string;
+  email?: string;
 
   @ApiProperty({
     example: 'Ivan Ivanov',
@@ -31,13 +25,4 @@ export class GoogleUserDto {
   @IsString()
   @IsOptional()
   fullName?: string;
-
-  @ApiProperty({
-    example:
-      'https://lh3.googleusercontent.com/a/ACg8ocJ2pvGMJDYUDa9RWpwtMJO5mahSuuSNN-4qHJc8pRRkXcvNfQ=s96-c',
-    description: 'User avatar URL',
-  })
-  @IsUrl()
-  @IsOptional()
-  avatar?: string;
 }
