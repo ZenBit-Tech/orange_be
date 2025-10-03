@@ -1,21 +1,21 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as dotenv from 'dotenv';
+import { join } from 'path';
+
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 async function bootstrap() {
+  console.log('Mongo URI:', process.env.MONGODB_URI);
   const app = await NestFactory.create(AppModule);
 
-  const config = new DocumentBuilder()
-    .setTitle('AI-Lab API')
-    .setDescription('API documentation for AI-Lab project')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+  });
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`app started on PORT ${process.env.PORT ?? 3000}`);
+  const port = process.env.PORT || 5000;
+  await app.listen(port);
+  console.log(`🚀 Server running on http://localhost:${port}`);
 }
 bootstrap();
