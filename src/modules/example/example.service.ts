@@ -1,22 +1,23 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Example } from './entities/example.entity';
-import { CreateExampleDto } from './dto/create-example.dto';
+// example.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Example } from './example.schema';
 
 @Injectable()
 export class ExampleService {
-  constructor(
-    @InjectRepository(Example)
-    private readonly exampleRepo: Repository<Example>,
-  ) {}
+  constructor(@InjectModel(Example.name) private exampleModel: Model<Example>) {}
 
-  async create(dto: CreateExampleDto): Promise<Example> {
-    const example = this.exampleRepo.create(dto);
-    return this.exampleRepo.save(example);
+  async create(data: Partial<Example>) {
+    const doc = new this.exampleModel(data);
+    return doc.save();
   }
 
-  async findAll(): Promise<Example[]> {
-    return this.exampleRepo.find();
+  async findAll() {
+    return this.exampleModel.find().exec();
+  }
+
+  async findOne(id: string) {
+    return this.exampleModel.findById(id).exec();
   }
 }

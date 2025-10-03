@@ -1,11 +1,14 @@
+
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Example } from './entities/example.entity';
+import { MongooseModule } from '@nestjs/mongoose';
 import { ExampleService } from './example.service';
 import { ExampleController } from './example.controller';
+import { Example, ExampleSchema } from './example.schema';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Example])],
+  imports: [
+    MongooseModule.forFeature([{ name: Example.name, schema: ExampleSchema }]),
+  ],
   controllers: [ExampleController],
   providers: [ExampleService],
   exports: [ExampleService],
