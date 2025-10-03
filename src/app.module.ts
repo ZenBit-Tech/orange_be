@@ -1,10 +1,13 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import databaseConfig from './config/database.config';
+import { ConfigModule, ConfigService, ConfigType } from '@nestjs/config';
+import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { databaseConfig } from './config/database.config';
 import { ExampleModule } from '@modules/example/example.module';
 import { UserModule } from './modules/user/user.module';
 
+type AppConfig = {
+  database: ConfigType<typeof databaseConfig>;
+};
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -15,11 +18,10 @@ import { UserModule } from './modules/user/user.module';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => {
-        const dbConfig = config.get<Record<string, any>>('database');
-        return {
-          ...dbConfig,
-        };
+      useFactory: (config: ConfigService<AppConfig>): TypeOrmModuleOptions => {
+        const dbConfig =
+          config.getOrThrow<ConfigType<typeof databaseConfig>>('database');
+        return dbConfig;
       },
     }),
 
