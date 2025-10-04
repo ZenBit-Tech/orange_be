@@ -3,10 +3,10 @@ import { ConfigModule, ConfigService, ConfigType } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { databaseConfig } from './config/database.config';
 import { ExampleModule } from '@modules/example/example.module';
-import { UserModule } from './modules/user/user.module';
+import { AuthModule } from '@modules/auth/auth.module';
 import { GoogleStrategy } from '@modules/auth/strategies/google-strategy';
 import googleOauthConfig from '@config/google-oauth.config';
-import { AuthModule } from '@modules/auth/auth.module';
+import { UserModule } from './modules/user/user.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
