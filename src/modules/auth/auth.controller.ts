@@ -1,5 +1,7 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -14,7 +16,10 @@ interface RequestWithUser extends Request {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private configService: ConfigService,
+  ) {}
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/login')
@@ -32,7 +37,22 @@ export class AuthController {
   })
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')
-  googleCallback(@Req() req: RequestWithUser): Promise<AuthResponseDto> {
-    return this.authService.validateOAuthLogin(req.user);
+  async googleCallback(
+    @Req() req: RequestWithUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    const response = await this.authService.validateOAuthLogin(req.user);
+    const url = this.configService.get<string>('FRONTEND_URL');
+
+    if (!url) throw new Error('FRONTEND_URL is not defined');
+
+    res.cookie('jwt', response.accessToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 24,
+    });
+
+    res.redirect(url);
   }
 }
