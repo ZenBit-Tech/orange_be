@@ -1,5 +1,4 @@
 import { registerAs } from '@nestjs/config';
-import { Example } from '../modules/example/entities/example.entity';
 import { User } from '@modules/user/entities/user.entity';
 
 export const databaseConfig = registerAs('database', () => ({
@@ -11,7 +10,7 @@ export const databaseConfig = registerAs('database', () => ({
   database: process.env.DB_NAME || 'ailab',
   autoLoadEntities: true,
   synchronize: true,
-  entities: [Example, User],
+  entities: [User],
   migrations: [
     '@src/database/migrations/*.ts',
     '@dist/database/migrations/*.js',
