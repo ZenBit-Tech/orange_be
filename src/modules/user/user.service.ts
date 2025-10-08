@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GoogleUserDto } from '@database/dtos/google-user.dto';
@@ -23,18 +23,5 @@ export class UserService {
     });
 
     return this.usersRepository.save(newUser);
-  }
-
-  async getMe(userId: string): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: {
-        id: userId,
-      },
-    });
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
-    return user;
   }
 }

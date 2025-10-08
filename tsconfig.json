@@ -17,8 +17,7 @@
     "paths": {
       "@modules/*": ["modules/*"],
       "@config/*": ["config/*"],
-      "@database/*": ["database/*"],
-      "@common/*": ["common/*"]
+      "@database/*": ["database/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

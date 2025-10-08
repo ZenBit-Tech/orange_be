@@ -1,5 +1,5 @@
 import { DataSource } from 'typeorm';
-import { User } from '@modules/user/entities/user.entity';
+import { Example } from '@modules/example/entities/example.entity';
 
 export default new DataSource({
   type: 'mysql',
@@ -8,6 +8,6 @@ export default new DataSource({
   username: process.env.DB_USER || 'root',
   password: process.env.DB_PASS || 'rootroot',
   database: process.env.DB_NAME || 'ailab',
-  entities: [User],
+  entities: [Example],
   migrations: ['src/database/migrations/*.ts'],
 });

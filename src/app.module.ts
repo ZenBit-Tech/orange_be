@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService, ConfigType } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
-import { databaseConfig } from '@config/database.config';
+import { databaseConfig } from './config/database.config';
+import { ExampleModule } from '@modules/example/example.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { GoogleStrategy } from '@modules/auth/strategies/google-strategy';
 import googleOauthConfig from '@config/google-oauth.config';
-import { UserModule } from '@modules/user/user.module';
-import jwtConfig from '@config/jwt.config';
-import { validate } from '@common/validation/env.validation';
+import { UserModule } from './modules/user/user.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -16,9 +15,7 @@ type AppConfig = {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env.development.local',
-      load: [databaseConfig, googleOauthConfig, jwtConfig],
-      validate,
+      load: [databaseConfig, googleOauthConfig],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -31,10 +28,12 @@ type AppConfig = {
       },
     }),
 
+    ExampleModule,
+
     UserModule,
+
     AuthModule,
   ],
   providers: [GoogleStrategy],
-  controllers: [],
 })
 export class AppModule {}
