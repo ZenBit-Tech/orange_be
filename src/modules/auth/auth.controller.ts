@@ -42,9 +42,7 @@ export class AuthController {
     @Res() res: Response,
   ): Promise<void> {
     const response = await this.authService.validateOAuthLogin(req.user);
-    const url = this.configService.get<string>('FRONTEND_URL');
-
-    if (!url) throw new Error('FRONTEND_URL is not defined');
+    const url = this.configService.get<string>('FRONTEND_URL') + '/upload';
 
     res.cookie('jwt', response.accessToken, {
       httpOnly: true,
