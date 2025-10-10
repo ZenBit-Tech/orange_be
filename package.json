@@ -23,7 +23,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "test:unit": "NODE_ENV=.env.development.local jest --config ./coverage/unit/jest-unit.json --runInBand",
+    "test:unit": "NODE_ENV=.env.development.local jest --config ./tests/unit/jest-unit.json --runInBand",
     "prepare": "husky"
   },
   "dependencies": {
