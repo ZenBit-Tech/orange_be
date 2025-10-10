@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -6,6 +6,7 @@ import { UserModule } from '@modules/user/user.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './strategies/google-strategy';
+import { RedisModule } from '@modules/redis/redis.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { GoogleStrategy } from './strategies/google-strategy';
         },
       }),
     }),
-    forwardRef(() => UserModule),
+    UserModule,
+    RedisModule,
   ],
   providers: [AuthService, GoogleStrategy],
   controllers: [AuthController],

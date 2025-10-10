@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { UserService } from '@modules/user/user.service';
+import { RedisService } from '@modules/redis/redis.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class AuthService {
   constructor(
     private jwtService: JwtService,
     private usersService: UserService,
+    private redisService: RedisService,
   ) {}
   async validateOAuthLogin(profile: GoogleUserDto): Promise<AuthResponseDto> {
     let user = await this.usersService.findByGoogleId(profile.id);
@@ -16,10 +18,11 @@ export class AuthService {
       user = await this.usersService.createGoogleUser(profile);
     }
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = { id: user.id, email: user.email };
 
     const jwt = this.jwtService.sign(payload);
 
+    await this.redisService.insert(`user-${user.id}`, jwt);
     return {
       accessToken: jwt,
       user,

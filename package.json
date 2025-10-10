@@ -23,6 +23,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:unit": "NODE_ENV=.env.development.local jest --config ./coverage/unit/jest-unit.json --runInBand",
     "prepare": "husky"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
+    "@golevelup/ts-jest": "^0.7.0",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.1.6",
@@ -73,7 +75,7 @@
     "eslint-plugin-react-hooks": "^4.3.0",
     "globals": "^16.0.0",
     "husky": "^9.1.7",
-    "jest": "^30.0.0",
+    "jest": "^30.2.0",
     "lint-staged": "^16.2.3",
     "prettier": "^3.4.2",
     "source-map-support": "^0.5.21",
