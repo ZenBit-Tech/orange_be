@@ -23,6 +23,10 @@ export class User {
   @Column({ unique: true, nullable: true })
   googleId: string;
 
+  @ApiProperty({ description: 'UserId from Linkedin' })
+  @Column({ unique: true, nullable: true })
+  linkedinId?: string;
+
   @ApiProperty({ description: 'Email of user' })
   @Column({ unique: true })
   email: string;

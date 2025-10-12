@@ -48,6 +48,18 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   GOOGLE_CALLBACK_URL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  LINKEDIN_CLIENT_ID: string;
+
+  @IsString()
+  @IsNotEmpty()
+  LINKEDIN_CLIENT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  LINKEDIN_CALLBACK_URL: string;
 }
 
 export function validate(config: Record<string, unknown>) {

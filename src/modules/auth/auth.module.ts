@@ -6,7 +6,7 @@ import { UserModule } from '@modules/user/user.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './strategies/google-strategy';
-
+import { LinkedInStrategy } from './strategies/linkedin.strategy';
 @Module({
   imports: [
     ConfigModule,
@@ -23,7 +23,7 @@ import { GoogleStrategy } from './strategies/google-strategy';
     }),
     forwardRef(() => UserModule),
   ],
-  providers: [AuthService, GoogleStrategy],
+  providers: [AuthService, GoogleStrategy, LinkedInStrategy],
   controllers: [AuthController],
   exports: [JwtModule],
 })

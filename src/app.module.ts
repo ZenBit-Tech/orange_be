@@ -8,6 +8,7 @@ import googleOauthConfig from '@config/google-oauth.config';
 import { UserModule } from '@modules/user/user.module';
 import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
+import linkedinAuth from '@config/linkedin-oauth.config';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -16,8 +17,8 @@ type AppConfig = {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env.development.local',
-      load: [databaseConfig, googleOauthConfig, jwtConfig],
+      envFilePath: '.env',
+      load: [databaseConfig, googleOauthConfig, jwtConfig, linkedinAuth],
       validate,
     }),
 
