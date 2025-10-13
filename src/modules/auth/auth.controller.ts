@@ -2,11 +2,13 @@ import { Controller, Get, Req, Res, UseGuards, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { GoogleAuthGuard } from './guards/google-auth.guard';
+
+import { COOKIE_MAX_AGE } from '@common/constants';
+
 import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { LinkedInAuthGuard } from './guards/linkedin.auth.guard';
-import { COOKIE_MAX_AGE } from '@common/constants';
 
 interface User {
   id: string;
