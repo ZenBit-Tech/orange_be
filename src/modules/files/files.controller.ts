@@ -18,7 +18,7 @@ export class FilesController {
   @ApiOkResponse({ description: 'Data from client' })
   @ApiBearerAuth()
   @Post()
-  create(@Body() dto: CreateFileDto) {
-    return dto;
+  create(@Body() createFileDto: CreateFileDto) {
+    return createFileDto;
   }
 }

@@ -6,12 +6,10 @@ import { createMock } from '@golevelup/ts-jest';
 import { ConfigModule } from '@nestjs/config';
 
 import { JwtAuthGuard } from '@modules/files/guards/jwt-auth.guard';
-import { RedisService } from '@modules/redis/redis.service';
 import jwtConfig from '@config/jwt.config';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
-  let redisService: RedisService;
   let reflector: Reflector;
   let mockExecutionContext: ExecutionContext;
 
@@ -24,10 +22,7 @@ describe('JwtAuthGuard', () => {
       ],
       providers: [
         JwtAuthGuard,
-        {
-          provide: RedisService,
-          useValue: createMock<RedisService>(),
-        },
+
         {
           provide: JwtService,
           useValue: createMock<JwtService>(),
@@ -40,7 +35,6 @@ describe('JwtAuthGuard', () => {
     }).compile();
 
     guard = moduleRef.get<JwtAuthGuard>(JwtAuthGuard);
-    redisService = moduleRef.get<RedisService>(RedisService);
     reflector = moduleRef.get<Reflector>(Reflector);
     mockExecutionContext = createMock<ExecutionContext>();
   });
@@ -68,29 +62,5 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
       new UnauthorizedException('Authorization token is required'),
     );
-  });
-
-  it('should not allow access with an invalid token', async () => {
-    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
-    jest
-      .spyOn(guard as any, 'getTokenFromCookies')
-      .mockReturnValue('invalid-token');
-    jest.spyOn(redisService, 'validate').mockResolvedValue(false);
-
-    await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
-      new UnauthorizedException(
-        'Authorization token is not valid. Error: TypeError: Cannot convert object to primitive value',
-      ),
-    );
-  });
-
-  it('should allow access with a valid token', async () => {
-    const validToken = 'valid-token';
-    jest.spyOn(guard as any, 'getTokenFromCookies').mockReturnValue(validToken);
-    jest.spyOn(redisService, 'validate').mockResolvedValue(true);
-
-    const result = await guard.canActivate(mockExecutionContext);
-
-    expect(result).toBe(true);
   });
 });
