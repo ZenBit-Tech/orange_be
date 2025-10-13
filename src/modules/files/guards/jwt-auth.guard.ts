@@ -24,7 +24,6 @@ export class JwtAuthGuard implements CanActivate {
     @Inject(jwtConfig.KEY)
     private readonly jwtConfiguration: ConfigType<typeof jwtConfig>,
     private readonly jwtService: JwtService,
-
     private reflector: Reflector,
   ) {}
 
@@ -38,7 +37,7 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<UserRequest>();
-    const token = this.getToken(request);
+    const token = this.getTokenFromCookies(request);
     if (!token) {
       throw new UnauthorizedException('Authorization token is required');
     }
@@ -50,16 +49,22 @@ export class JwtAuthGuard implements CanActivate {
       );
 
       request[REQUEST_USER_KEY] = payload;
-    } catch (e) {
-      const error = e as Error;
-      throw new UnauthorizedException(error.message);
+    } catch (error) {
+      throw new UnauthorizedException(
+        `Authorization token is not valid. Error: ${error}`,
+      );
     }
 
     return true;
   }
 
-  private getToken(request: Request) {
+  private getTokenFromHeader(request: Request) {
     const [, token] = request.headers.authorization?.split(' ') ?? [];
     return token;
+  }
+
+  private getTokenFromCookies(request: Request): string | undefined {
+    const cookies = request.cookies as { jwt?: string };
+    return cookies.jwt;
   }
 }

@@ -7,13 +7,15 @@ import {
   Profile,
 } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
-import { GoogleUserDto } from '@database/dtos/google-user.dto';
+import { ProviderEnum } from '@common/enums/providers.enums';
+import { OAuthProfileDto } from '../dto/oauth-profile.dto';
 
 interface GoogleProfile {
   id: string;
   emails?: { value: string }[];
   displayName?: string;
   photos?: { value: string }[];
+  name: { givenName: string; familyName: string };
 }
 
 @Injectable()
@@ -42,15 +44,18 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         );
         return;
       }
-      const user: GoogleUserDto & {
-        accessToken: string;
-        refreshToken: string;
-      } = {
-        id: typedProfile.id,
-        email: typedProfile.emails?.[0]?.value,
-        fullName: typedProfile.displayName,
-        accessToken,
-        refreshToken,
+      const userEmail = typedProfile.emails?.[0]?.value || null;
+
+      if (!userEmail) {
+        return done(new Error('No email found in Google profile'), false);
+      }
+
+      const user: OAuthProfileDto = {
+        providerId: typedProfile.id,
+        provider: ProviderEnum.Google,
+        email: userEmail,
+        first_name: typedProfile.name.givenName,
+        last_name: typedProfile.name.familyName,
       };
 
       (done as (err: Error | null, user?: Express.User | false) => void)(

@@ -48,6 +48,22 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   GOOGLE_CALLBACK_URL: string;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_HOST: string;
+
+  @IsNumber()
+  @IsNotEmpty()
+  REDIS_PORT: number;
+
+  @IsNumber()
+  @IsNotEmpty()
+  REDIS_DATABASE: number;
+
+  @IsString()
+  @IsNotEmpty()
+  REDIS_KEY_PREFIX: string;
 }
 
 export function validate(config: Record<string, unknown>) {

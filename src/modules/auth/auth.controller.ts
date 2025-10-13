@@ -1,17 +1,15 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { OAuthProfileDto } from './dto/oauth-profile.dto';
 
-interface User {
-  id: string;
-  email: string;
-}
 interface RequestWithUser extends Request {
-  user: User;
+  user: OAuthProfileDto;
 }
 
 @Controller('auth')
@@ -20,10 +18,6 @@ export class AuthController {
     private authService: AuthService,
     private configService: ConfigService,
   ) {}
-
-  @UseGuards(GoogleAuthGuard)
-  @Get('google/login')
-  googleLogin() {}
 
   @ApiOperation({ summary: 'Google Auth callback' })
   @ApiResponse({
@@ -41,10 +35,34 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Res() res: Response,
   ): Promise<void> {
-    const response = await this.authService.validateOAuthLogin(req.user);
-    const url = this.configService.get<string>('FRONTEND_URL');
+    return this.handleOAuthCallback(req, res);
+  }
 
-    if (!url) throw new Error('FRONTEND_URL is not defined');
+  @ApiOperation({ summary: 'Facebook Auth callback' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully authenticated with Facebook',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+  })
+  @UseGuards(AuthGuard('facebook'))
+  @Get('facebook/callback')
+  async facebookCallback(
+    @Req() req: RequestWithUser,
+    @Res() res: Response,
+  ): Promise<void> {
+    return this.handleOAuthCallback(req, res);
+  }
+
+  private async handleOAuthCallback(
+    req: RequestWithUser,
+    res: Response,
+  ): Promise<void> {
+    const response = await this.authService.validateOAuthLogin(req.user);
+    const url = this.configService.get<string>('FRONTEND_URL') + '/upload';
 
     res.cookie('jwt', response.accessToken, {
       httpOnly: true,
