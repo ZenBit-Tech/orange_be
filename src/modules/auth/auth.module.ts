@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -7,6 +7,7 @@ import { UserModule } from '@modules/user/user.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './strategies/google-strategy';
+import { LinkedInStrategy } from './strategies/linkedin.strategy';
 import { MagicLink } from './entities/magic-link.entity';
 
 @Module({
@@ -18,13 +19,16 @@ import { MagicLink } from './entities/magic-link.entity';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '7d' },
+        secret: config.getOrThrow<string>('jwt.secret'),
+        signOptions: {
+          expiresIn: config.getOrThrow<string>('jwt.accessTokenTtl'),
+        },
       }),
     }),
-    UserModule,
+    forwardRef(() => UserModule),
   ],
-  providers: [AuthService, GoogleStrategy],
+  providers: [AuthService, GoogleStrategy, LinkedInStrategy],
   controllers: [AuthController],
+  exports: [JwtModule],
 })
 export class AuthModule {}

@@ -11,7 +11,9 @@ import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { GoogleUserDto } from '@database/dtos/google-user.dto';
+import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
 import { UserService } from '@modules/user/user.service';
+import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { MagicLink } from './entities/magic-link.entity';
 import { emailTemplate } from 'utils/emailTemplates/magicLink';
@@ -121,5 +123,21 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     return { accessToken, email };
+  async validateOAuthLinkedIn(
+    profile: LinkedinUserDto,
+  ): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByLinkedInId(profile.id);
+
+    if (!user) {
+      user = await this.usersService.createLinkedInUser(profile);
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    const jwt = this.jwtService.sign(payload);
+
+    return {
+      accessToken: jwt,
+      user,
+    };
   }
 }
