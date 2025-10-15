@@ -105,7 +105,8 @@
     "moduleNameMapper": {
       "^@modules/(.*)$": "<rootDir>/modules/$1",
       "^@database/(.*)$": "<rootDir>/database/$1",
-      "^@config/(.*)$": "<rootDir>/config/$1"
+      "^@config/(.*)$": "<rootDir>/config/$1",
+      "^utils/(.*)$": "<rootDir>/utils/$1"
     },
     "testEnvironment": "node",
     "verbose": true
