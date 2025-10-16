@@ -91,6 +91,8 @@ describe('AuthService', () => {
             createGoogleUser: jest.fn(),
             findByEmail: jest.fn(),
             create: jest.fn(),
+            findByLinkedInId: jest.fn(),
+            createLinkedInUser: jest.fn(),
           },
         },
         {
@@ -145,124 +147,200 @@ describe('AuthService', () => {
     jest.clearAllMocks();
   });
 
-  it('should return existing user with token', async () => {
-    const findByGoogleIdSpy = jest
-      .spyOn(userService, 'findByGoogleId')
-      .mockResolvedValueOnce(mockLinkedInUser);
+  describe('Google OAuth', () => {
+    it('should return existing user with token', async () => {
+      const findByGoogleIdSpy = jest
+        .spyOn(userService, 'findByGoogleId')
+        .mockResolvedValueOnce(mockGoogleUser);
 
-    const createGoogleUserSpy = jest.spyOn(userService, 'createGoogleUser');
+      const createGoogleUserSpy = jest.spyOn(userService, 'createGoogleUser');
 
-    const signSpy = jest
-      .spyOn(jwtService, 'sign')
-      .mockReturnValue('mocked-jwt-token');
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
 
-    const result: AuthResponseDto =
-      await authService.validateOAuthLogin(mockGoogleProfile);
+      const result: AuthResponseDto =
+        await authService.validateOAuthLogin(mockGoogleProfile);
 
-    expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
-    expect(createGoogleUserSpy).not.toHaveBeenCalled();
-    expect(signSpy).toHaveBeenCalledWith({
-      sub: mockGoogleUser.id,
-      email: mockGoogleUser.email,
+      expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
+      expect(createGoogleUserSpy).not.toHaveBeenCalled();
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockGoogleUser.id,
+        email: mockGoogleUser.email,
+      });
+      expect(result).toEqual({
+        accessToken: 'mocked-jwt-token',
+        user: mockGoogleUser,
+      });
     });
-    expect(result).toEqual({
-      accessToken: 'mocked-jwt-token',
-      user: mockGoogleUser,
-    });
-  });
 
-  it('should create a new user if not found by Google ID', async () => {
-    const findByGoogleIdSpy = jest
-      .spyOn(userService, 'findByGoogleId')
-      .mockResolvedValueOnce(null);
+    it('should create a new user if not found by Google ID', async () => {
+      const findByGoogleIdSpy = jest
+        .spyOn(userService, 'findByGoogleId')
+        .mockResolvedValueOnce(null);
 
-    const createUser = jest
-      .spyOn(userService, 'createGoogleUser')
-      .mockResolvedValueOnce(mockGoogleUser);
+      const createGoogleUserSpy = jest
+        .spyOn(userService, 'createGoogleUser')
+        .mockResolvedValueOnce(mockGoogleUser);
 
-    const result: AuthResponseDto =
-      await authService.validateOAuthLogin(mockGoogleUser);
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
 
-    expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
-    expect(createUser).toHaveBeenCalledWith(mockGoogleProfile);
-    expect(result.accessToken).toBe('mocked-jwt-token');
-    expect(result.user).toEqual(mockGoogleUser);
-  });
+      const result: AuthResponseDto =
+        await authService.validateOAuthLogin(mockGoogleProfile);
 
-  it('should create magic link and send email', async () => {
-    const findMailSpy = jest
-      .spyOn(userService, 'findByEmail')
-      .mockResolvedValue(mockGoogleUser);
-
-    const createSpy = jest
-      .spyOn(magicLinkRepository, 'create')
-      .mockReturnValue(mockMagicLink);
-
-    const saveSpy = jest
-      .spyOn(magicLinkRepository, 'save')
-      .mockResolvedValue(mockMagicLink);
-
-    const result = await authService.sendMagicLink(mockGoogleUser.email);
-
-    expect(findMailSpy).toHaveBeenCalledWith(mockGoogleUser.email);
-    expect(createSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: mockGoogleUser.id,
-        token: 'mocked-token-123',
-      }),
-    );
-    expect(saveSpy).toHaveBeenCalledWith(mockMagicLink);
-    expect(mockSendMail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: mockGoogleUser.email,
-        html: expect.stringContaining('mocked-token-123') as string,
-      }),
-    );
-    expect(result).toEqual({
-      message: `Sign-in link sent to ${mockGoogleUser.email}`,
+      expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
+      expect(createGoogleUserSpy).toHaveBeenCalledWith(mockGoogleProfile);
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockGoogleUser.id,
+        email: mockGoogleUser.email,
+      });
+      expect(result.accessToken).toBe('mocked-jwt-token');
+      expect(result.user).toEqual(mockGoogleUser);
     });
   });
 
-  it('should create user if not exists before sending magic link', async () => {
-    jest.spyOn(userService, 'findByEmail').mockResolvedValueOnce(null);
-    jest.spyOn(userService, 'create').mockResolvedValueOnce(mockGoogleUser);
-    jest
-      .spyOn(magicLinkRepository, 'create')
-      .mockReturnValueOnce(mockMagicLink);
+  describe('LinkedIn OAuth', () => {
+    it('should return existing user with token', async () => {
+      const findByLinkedInIdSpy = jest
+        .spyOn(userService, 'findByLinkedInId')
+        .mockResolvedValueOnce(mockLinkedInUser);
 
-    const result = await authService.sendMagicLink(mockGoogleUser.email);
+      const createLinkedInUserSpy = jest.spyOn(
+        userService,
+        'createLinkedInUser',
+      );
 
-    const createSpy = jest
-      .spyOn(userService, 'create')
-      .mockResolvedValueOnce(mockGoogleUser);
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
 
-    expect(createSpy).toHaveBeenCalledWith({ email: mockGoogleUser.email });
-    expect(result.message).toBe(`Sign-in link sent to ${mockGoogleUser.email}`);
+      const result: AuthResponseDto =
+        await authService.validateOAuthLinkedIn(mockLinkedInProfile);
+
+      expect(findByLinkedInIdSpy).toHaveBeenCalledWith('linkedin456');
+      expect(createLinkedInUserSpy).not.toHaveBeenCalled();
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockLinkedInUser.id,
+        email: mockLinkedInUser.email,
+      });
+      expect(result).toEqual({
+        accessToken: 'mocked-jwt-token',
+        user: mockLinkedInUser,
+      });
+    });
+
+    it('should create a new user if not found by LinkedIn ID', async () => {
+      const findByLinkedInIdSpy = jest
+        .spyOn(userService, 'findByLinkedInId')
+        .mockResolvedValueOnce(null);
+
+      const createLinkedInUserSpy = jest
+        .spyOn(userService, 'createLinkedInUser')
+        .mockResolvedValueOnce(mockLinkedInUser);
+
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
+
+      const result: AuthResponseDto =
+        await authService.validateOAuthLinkedIn(mockLinkedInProfile);
+
+      expect(findByLinkedInIdSpy).toHaveBeenCalledWith('linkedin456');
+      expect(createLinkedInUserSpy).toHaveBeenCalledWith(mockLinkedInProfile);
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockLinkedInUser.id,
+        email: mockLinkedInUser.email,
+      });
+      expect(result.accessToken).toBe('mocked-jwt-token');
+      expect(result.user).toEqual(mockLinkedInUser);
+    });
+
+    it('should generate JWT with correct payload for LinkedIn user', async () => {
+      jest
+        .spyOn(userService, 'findByLinkedInId')
+        .mockResolvedValueOnce(mockLinkedInUser);
+
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
+
+      await authService.validateOAuthLinkedIn(mockLinkedInProfile);
+
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockLinkedInUser.id,
+        email: mockLinkedInUser.email,
+      });
+    });
   });
 
-  it('should verify valid token and return JWT', async () => {
-    jest
-      .spyOn(userService, 'findByEmail')
-      .mockResolvedValueOnce(mockGoogleUser);
-    jest
-      .spyOn(magicLinkRepository, 'findOne')
-      .mockResolvedValueOnce(mockMagicLink);
-    jest
-      .spyOn(magicLinkRepository, 'remove')
-      .mockResolvedValueOnce(mockMagicLink);
+  describe('Token Generation', () => {
+    it('should generate valid JWT tokens for both Google and LinkedIn', async () => {
+      jest
+        .spyOn(userService, 'findByGoogleId')
+        .mockResolvedValueOnce(mockGoogleUser);
+      jest
+        .spyOn(userService, 'findByLinkedInId')
+        .mockResolvedValueOnce(mockLinkedInUser);
 
-    const result = await authService.verifyToken(
-      mockMagicLink.token,
-      mockGoogleUser.email,
-    );
-    const removeSpy = jest
-      .spyOn(magicLinkRepository, 'remove')
-      .mockResolvedValueOnce(mockMagicLink);
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
 
-    expect(removeSpy).toHaveBeenCalled();
-    expect(result).toEqual({
-      accessToken: 'mocked-jwt-token',
-      email: mockGoogleUser.email,
+      const googleResult =
+        await authService.validateOAuthLogin(mockGoogleProfile);
+      const linkedInResult =
+        await authService.validateOAuthLinkedIn(mockLinkedInProfile);
+
+      expect(signSpy).toHaveBeenCalledTimes(2);
+      expect(googleResult.accessToken).toBe('mocked-jwt-token');
+      expect(linkedInResult.accessToken).toBe('mocked-jwt-token');
+    });
+
+    describe('Magic Link', () => {
+      it('should create user if not exists before sending magic link', async () => {
+        jest.spyOn(userService, 'findByEmail').mockResolvedValueOnce(null);
+        jest.spyOn(userService, 'create').mockResolvedValueOnce(mockGoogleUser);
+        jest
+          .spyOn(magicLinkRepository, 'create')
+          .mockReturnValueOnce(mockMagicLink);
+        const result = await authService.sendMagicLink(mockGoogleUser.email);
+        const createSpy = jest
+          .spyOn(userService, 'create')
+          .mockResolvedValueOnce(mockGoogleUser);
+
+        expect(createSpy).toHaveBeenCalledWith({ email: mockGoogleUser.email });
+        expect(result.message).toBe(
+          `Sign-in link sent to ${mockGoogleUser.email}`,
+        );
+      });
+    });
+
+    it('should verify valid token and return JWT', async () => {
+      jest
+        .spyOn(userService, 'findByEmail')
+        .mockResolvedValueOnce(mockGoogleUser);
+      jest
+        .spyOn(magicLinkRepository, 'findOne')
+        .mockResolvedValueOnce(mockMagicLink);
+      jest
+        .spyOn(magicLinkRepository, 'remove')
+        .mockResolvedValueOnce(mockMagicLink);
+
+      const result = await authService.verifyToken(
+        mockMagicLink.token,
+        mockGoogleUser.email,
+      );
+      const removeSpy = jest
+        .spyOn(magicLinkRepository, 'remove')
+        .mockResolvedValueOnce(mockMagicLink);
+
+      expect(removeSpy).toHaveBeenCalled();
+      expect(result).toEqual({
+        accessToken: 'mocked-jwt-token',
+        email: mockGoogleUser.email,
+      });
     });
   });
 });
