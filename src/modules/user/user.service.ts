@@ -35,6 +35,7 @@ export class UserService {
     });
 
     return this.usersRepository.save(newUser);
+  }
   async getMe(userId: string): Promise<User> {
     const user = await this.usersRepository.findOne({
       where: {

@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
-import session from 'express-session';
+import session, { SessionOptions } from 'express-session';
 import passport from 'passport';
 import { COOKIE_SECURE } from '@common/constants';
 
@@ -19,7 +19,7 @@ async function bootstrap() {
     .build();
 
   app.use(
-    session({
+    (session as (options?: SessionOptions) => any)({
       secret: process.env.SESSION_SECRET || 'someRandomSecret',
       resave: false,
       saveUninitialized: false,

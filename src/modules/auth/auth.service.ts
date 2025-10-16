@@ -13,7 +13,6 @@ import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
 import { UserService } from '@modules/user/user.service';
-import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { MagicLink } from './entities/magic-link.entity';
 import { emailTemplate } from 'utils/emailTemplates/magicLink';
@@ -123,6 +122,8 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload);
 
     return { accessToken, email };
+  }
+
   async validateOAuthLinkedIn(
     profile: LinkedinUserDto,
   ): Promise<AuthResponseDto> {
