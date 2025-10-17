@@ -9,7 +9,7 @@ import {
   Req,
   Res,
   UseGuards,
-  seGuards, Logger
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
@@ -133,6 +133,7 @@ export class AuthController {
     @Query('email') email: string,
   ): Promise<MagicLinkResponseDto> {
     return this.authService.verifyToken(token, email);
+  }
   @UseGuards(LinkedInAuthGuard)
   @Get('linkedin/login')
   @ApiOperation({ summary: 'Initiate LinkedIn OAuth login' })
