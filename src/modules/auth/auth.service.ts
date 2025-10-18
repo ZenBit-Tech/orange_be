@@ -1,32 +1,60 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '@modules/user/user.service';
-import { User } from '@modules/user/entities/user.entity';
+import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { OAuthProfileDto } from './dto/oauth-profile.dto';
-
+import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 @Injectable()
 export class AuthService {
   constructor(
     private jwtService: JwtService,
     private usersService: UserService,
   ) {}
-  async validateOAuthLogin(profile: OAuthProfileDto): Promise<AuthResponseDto> {
-    const user = await this.usersService.findOneBy({
-      providers: { providerId: profile.providerId },
-    });
-
-    if (user) {
-      return this.login(user);
+  async validateOAuthLogin(profile: GoogleUserDto): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByGoogleId(profile.id);
+    if (!user) {
+      user = await this.usersService.createGoogleUser(profile);
     }
 
-    const newUser = await this.usersService.create(profile);
-    return this.login(newUser);
+    const payload = { sub: user.id, email: user.email };
+
+    const jwt = this.jwtService.sign(payload);
+
+    return {
+      accessToken: jwt,
+      user,
+    };
   }
 
-  private login(user: User): AuthResponseDto {
-    const payload = { id: user.id, email: user.email };
+  async validateOAuthLinkedIn(
+    profile: LinkedinUserDto,
+  ): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByLinkedinEmail(profile.email);
 
+    if (!user) {
+      user = await this.usersService.createLinkedInUser(profile);
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    const jwt = this.jwtService.sign(payload);
+
+    return {
+      accessToken: jwt,
+      user,
+    };
+  }
+
+  async validateOAuthFacebook(
+    profile: FacebookUserDto,
+  ): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByFacebookId(profile.id);
+
+    if (!user) {
+      user = await this.usersService.createFacebookUser(profile);
+    }
+
+    const payload = { sub: user.id, email: user.email };
     const jwt = this.jwtService.sign(payload);
 
     return {

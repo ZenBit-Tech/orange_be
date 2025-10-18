@@ -1,6 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import session from 'express-session';
+import passport from 'passport';
+import { COOKIE_SECURE } from '@common/constants';
 import cookieParser from 'cookie-parser';
 import { TransformInterceptor } from '@common/interceptors/transform.interceptor';
 import { AppModule } from './app.module';
@@ -34,12 +37,25 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || 'someRandomSecret',
+      resave: false,
+      saveUninitialized: false,
+      cookie: { secure: COOKIE_SECURE },
+    }),
+  );
+
+  passport.serializeUser((user, done) => done(null, user));
+  passport.deserializeUser((user: Express.User, done) => done(null, user));
+
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`app started on PORT ${process.env.PORT ?? 3000}`);
 }
-bootstrap().catch(() => {
-  process.exit(1);
-});
+void bootstrap();

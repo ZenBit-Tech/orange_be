@@ -7,9 +7,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './strategies/google-strategy';
+import { LinkedInStrategy } from './strategies/linkedin.strategy';
 import { FacebookStrategy } from './strategies/facebook.strategy';
-import { ProviderService } from './provider.service';
-import { Provider } from './entities/provider.entity';
 
 @Module({
   imports: [
@@ -26,9 +25,9 @@ import { Provider } from './entities/provider.entity';
       }),
     }),
     forwardRef(() => UserModule),
-    TypeOrmModule.forFeature([Provider]),
+    TypeOrmModule.forFeature([]),
   ],
-  providers: [AuthService, GoogleStrategy, FacebookStrategy, ProviderService],
+  providers: [AuthService, GoogleStrategy, LinkedInStrategy, FacebookStrategy],
   controllers: [AuthController],
   exports: [JwtModule, TypeOrmModule],
 })

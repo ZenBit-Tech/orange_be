@@ -6,8 +6,9 @@ import { UserModule } from '@modules/user/user.module';
 import { databaseConfig } from '@config/database.config';
 import googleOauthConfig from '@config/google-oauth.config';
 import jwtConfig from '@config/jwt.config';
-import facebookConfig from '@config/facebook.config';
+import facebookOauthConfig from '@config/facebook-oauth.config';
 import { validate } from '@common/validation/env.validation';
+import linkedinAuth from '@config/linkedin-oauth.config';
 import { FilesModule } from './modules/files/files.module';
 
 type AppConfig = {
@@ -17,8 +18,14 @@ type AppConfig = {
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env.development.local',
-      load: [databaseConfig, googleOauthConfig, jwtConfig, facebookConfig],
+      envFilePath: '.env',
+      load: [
+        databaseConfig,
+        googleOauthConfig,
+        jwtConfig,
+        linkedinAuth,
+        facebookOauthConfig,
+      ],
       validate,
     }),
 

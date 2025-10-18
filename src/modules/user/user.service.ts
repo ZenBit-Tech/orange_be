@@ -1,44 +1,29 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository, DataSource } from 'typeorm';
-import { OAuthProfileDto } from '@modules/auth/dto/oauth-profile.dto';
-
-import { Provider } from '@modules/auth/entities/provider.entity';
+import { Repository } from 'typeorm';
+import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { User } from './entities/user.entity';
-
+import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-
-    private dataSource: DataSource,
   ) {}
 
-  async create(profile: OAuthProfileDto): Promise<User> {
-    return await this.dataSource.transaction(async (entityManager) => {
-      const user = entityManager.create(User, profile);
-      const savedUser = await entityManager.save(User, user);
+  async findByGoogleId(googleId: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { googleId } });
+  }
 
-      const userProvider = entityManager.create(Provider, {
-        providerId: profile.providerId,
-        name: profile.provider,
-        user: savedUser,
-      });
-      await entityManager.save(Provider, userProvider);
-
-      return savedUser;
+  async createGoogleUser(profile: GoogleUserDto): Promise<User> {
+    const newUser = this.usersRepository.create({
+      googleId: profile.id,
+      email: profile.email,
+      fullName: profile.fullName,
     });
-  }
 
-  async findOneBy(
-    where: FindOptionsWhere<User> | FindOptionsWhere<User>[],
-  ): Promise<User | null> {
-    return this.usersRepository.findOne({ where });
-  }
-
-  async save(user: User): Promise<User> {
-    return this.usersRepository.save(user);
+    return this.usersRepository.save(newUser);
   }
 
   async getMe(userId: string): Promise<User> {
@@ -52,5 +37,35 @@ export class UserService {
     }
 
     return user;
+  }
+
+  async findByLinkedinEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { email },
+    });
+  }
+
+  async createLinkedInUser(profile: LinkedinUserDto): Promise<User> {
+    const user = this.usersRepository.create({
+      linkedinId: profile.id,
+      email: profile.email,
+      fullName: profile.fullName,
+    });
+    return this.usersRepository.save(user);
+  }
+
+  async findByFacebookId(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+    });
+  }
+
+  async createFacebookUser(profile: FacebookUserDto): Promise<User> {
+    const user = this.usersRepository.create({
+      facebookId: profile.id,
+      email: profile.email,
+      fullName: profile.fullName,
+    });
+    return this.usersRepository.save(user);
   }
 }

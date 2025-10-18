@@ -1,11 +1,9 @@
-import { Provider } from '@modules/auth/entities/provider.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 import {
   Column,
   CreateDateColumn,
   Entity,
-  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -21,20 +19,25 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @ApiProperty({ description: 'UserId from Google' })
+  @Column({ unique: true, nullable: true })
+  googleId: string;
+
+  @ApiProperty({ description: 'UserId from Linkedin' })
+  @Column({ unique: true, nullable: true })
+  linkedinId?: string;
+
+  @ApiProperty({ description: 'UserId from Facebook' })
+  @Column({ unique: true, nullable: true })
+  facebookId?: string;
+
   @ApiProperty({ description: 'Email of user' })
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   email: string;
 
-  @ApiProperty({ description: 'First Name of user' })
+  @ApiProperty({ description: 'Full Name of user' })
   @Column({ nullable: true })
-  first_name: string;
-
-  @ApiProperty({ description: 'Last Name of user' })
-  @Column({ nullable: true })
-  last_name: string;
-
-  @OneToMany(() => Provider, (provider) => provider.user)
-  providers: Provider[];
+  fullName: string;
 
   @ApiProperty({ description: 'Create date of user' })
   @CreateDateColumn({ name: 'created_at' })

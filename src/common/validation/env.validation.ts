@@ -51,19 +51,15 @@ class EnvironmentVariables {
 
   @IsString()
   @IsNotEmpty()
-  REDIS_HOST: string;
-
-  @IsNumber()
-  @IsNotEmpty()
-  REDIS_PORT: number;
-
-  @IsNumber()
-  @IsNotEmpty()
-  REDIS_DATABASE: number;
+  LINKEDIN_CLIENT_ID: string;
 
   @IsString()
   @IsNotEmpty()
-  REDIS_KEY_PREFIX: string;
+  LINKEDIN_CLIENT_SECRET: string;
+
+  @IsString()
+  @IsNotEmpty()
+  LINKEDIN_CALLBACK_URL: string;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Profile, Strategy } from 'passport-facebook';
-import { ProviderEnum } from '@common/enums/providers.enums';
-import { OAuthProfileDto } from '../dto/oauth-profile.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 
 @Injectable()
 export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
@@ -12,8 +11,9 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
       clientID: cs.getOrThrow<string>('FACEBOOK_CLIENT_ID'),
       clientSecret: cs.getOrThrow<string>('FACEBOOK_SECRET'),
       callbackURL: cs.getOrThrow<string>('FACEBOOK_CALLBACK_URL'),
-      scope: 'email',
-      profileFields: ['id', 'emails', 'name'],
+      scope: cs.getOrThrow<string>('facebookConfig.scope'),
+      profileFields: cs.getOrThrow<string[]>('facebookConfig.profileFields'),
+      enableProof: true,
     });
   }
   validate(
@@ -26,22 +26,23 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
       info?: string | null,
     ) => void,
   ): void {
-    const { name, emails, id } = profile;
+    try {
+      const { name, id, emails } = profile;
 
-    const userEmail = emails && emails.length > 0 ? emails[0].value : null;
-    const firstName = name?.givenName || '';
-    const lastName = name?.familyName || '';
+      const fullName = `${name?.givenName} ${name?.familyName}`.trim();
 
-    if (!userEmail) {
-      return done(new Error('No email found in Facebook profile'), null);
+      const user: FacebookUserDto = {
+        id: id,
+        email: emails && emails[0] ? emails[0].value : `${id}@facebook.com`,
+        fullName: fullName,
+      };
+      done(null, user);
+    } catch (err) {
+      const error =
+        err instanceof Error
+          ? err
+          : new Error('Unknown error during validation');
+      done(error, null, null);
     }
-    const payload: OAuthProfileDto = {
-      provider: ProviderEnum.Facebook,
-      providerId: id,
-      email: userEmail,
-      first_name: `${firstName}`.trim(),
-      last_name: `${lastName}`.trim(),
-    };
-    done(null, payload);
   }
 }
