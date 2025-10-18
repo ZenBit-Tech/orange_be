@@ -1,12 +1,15 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import session from 'express-session';
+import { ConfigService } from '@nestjs/config';
+import { AppModule } from './app.module';
+import session, { SessionOptions } from 'express-session';
 import passport from 'passport';
 import { COOKIE_SECURE } from '@common/constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  const configService = app.get(ConfigService);
 
   const config = new DocumentBuilder()
     .setTitle('AI-Lab API')
@@ -16,7 +19,7 @@ async function bootstrap() {
     .build();
 
   app.use(
-    session({
+    (session as (options?: SessionOptions) => any)({
       secret: process.env.SESSION_SECRET || 'someRandomSecret',
       resave: false,
       saveUninitialized: false,
@@ -32,6 +35,12 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
+
+  app.enableCors({
+    origin: [configService.get<string>('FRONTEND_URL')],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`app started on PORT ${process.env.PORT ?? 3000}`);
