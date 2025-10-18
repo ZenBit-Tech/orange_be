@@ -57,27 +57,27 @@ export class AuthService {
   }
 
   async sendMagicLink(email: string): Promise<{ message: string }> {
-    let user = await this.usersService.findByEmail(email);
-
-    if (!user) {
-      user = await this.usersService.create({ email });
-    }
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
-
-    const magicLink = this.magicLinkRepository.create({
-      userId: user.id,
-      token,
-      expiresAt,
-    });
-
-    await this.magicLinkRepository.save(magicLink);
-
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-    const magicLinkUrl = `${frontendUrl}/verify?token=${token}&email=${encodeURIComponent(email)}`;
-
     try {
+      let user = await this.usersService.findByEmail(email);
+
+      if (!user) {
+        user = await this.usersService.create({ email });
+      }
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      const magicLink = this.magicLinkRepository.create({
+        userId: user.id,
+        token,
+        expiresAt,
+      });
+
+      await this.magicLinkRepository.save(magicLink);
+
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const magicLinkUrl = `${frontendUrl}/verify?token=${token}&email=${encodeURIComponent(email)}`;
+
       await this.transporter.sendMail({
         from: this.configService.get<string>('MAIL_FROM'),
         to: email,
@@ -86,7 +86,10 @@ export class AuthService {
       });
 
       return { message: `Sign-in link sent to ${email}` };
-    } catch {
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(`Failed to send email: ${error.message}`);
+      }
       throw new BadRequestException('Failed to send email. Please try again.');
     }
   }
@@ -95,33 +98,44 @@ export class AuthService {
     token: string,
     email: string,
   ): Promise<{ accessToken: string; email: string }> {
-    const user = await this.usersService.findByEmail(email);
-    if (!user) {
-      throw new UnauthorizedException('User not found!');
-    }
-    const magicLink = await this.magicLinkRepository.findOne({
-      where: {
-        userId: user.id,
-        token,
-      },
-    });
+    try {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new UnauthorizedException('User not found!');
+      }
+      const magicLink = await this.magicLinkRepository.findOne({
+        where: {
+          userId: user.id,
+          token,
+        },
+      });
 
-    if (!magicLink) {
-      throw new UnauthorizedException('Invalid token or email.');
-    }
+      if (!magicLink) {
+        throw new UnauthorizedException('Invalid token or email.');
+      }
 
-    if (new Date() > magicLink.expiresAt) {
-      throw new UnauthorizedException(
-        'Token was expired.Please request a new magic link',
+      if (new Date() > magicLink.expiresAt) {
+        throw new UnauthorizedException(
+          'Token was expired.Please request a new magic link',
+        );
+      }
+
+      await this.magicLinkRepository.remove(magicLink);
+
+      const payload = { email: user.email, sub: user.id };
+      const accessToken = this.jwtService.sign(payload);
+
+      return { accessToken, email };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(
+          `Token verification failed: ${error.message}`,
+        );
+      }
+      throw new BadRequestException(
+        'Token verification failed. Please try again.',
       );
     }
-
-    await this.magicLinkRepository.remove(magicLink);
-
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload);
-
-    return { accessToken, email };
   }
 
   async validateOAuthLinkedIn(
