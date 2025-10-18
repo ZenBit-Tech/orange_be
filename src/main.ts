@@ -3,6 +3,8 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import session from 'express-session';
 import passport from 'passport';
+import helmet from 'helmet';
+import compression from 'compression';
 import { COOKIE_SECURE } from '@common/constants';
 
 async function bootstrap() {
@@ -14,6 +16,10 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
+
+  app.use(helmet());
+
+  app.use(compression());
 
   app.use(
     session({

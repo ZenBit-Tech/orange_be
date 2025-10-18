@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService, ConfigType } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { databaseConfig } from '@config/database.config';
 import { AuthModule } from '@modules/auth/auth.module';
 import { GoogleStrategy } from '@modules/auth/strategies/google-strategy';
@@ -9,12 +10,19 @@ import { UserModule } from '@modules/user/user.module';
 import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
 import linkedinAuth from '@config/linkedin-oauth.config';
+import { APP_GUARD } from '@nestjs/core';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
 };
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 10,
+      },
+    ]),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -35,7 +43,13 @@ type AppConfig = {
     UserModule,
     AuthModule,
   ],
-  providers: [GoogleStrategy],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    GoogleStrategy,
+  ],
   controllers: [],
 })
 export class AppModule {}

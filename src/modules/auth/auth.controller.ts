@@ -9,14 +9,10 @@ import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { LinkedInAuthGuard } from './guards/linkedin.auth.guard';
-
-interface User {
-  id: string;
-  email: string;
-}
+import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 
 interface RequestWithUser extends Request {
-  user: User;
+  user: OAuthUserDto;
 }
 
 @Controller('auth')
@@ -48,19 +44,40 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Res() res: Response,
   ): Promise<void> {
-    const response = await this.authService.validateOAuthLogin(req.user);
-    const url = this.configService.get<string>('FRONTEND_URL');
+    try {
+      this.logger.log('Google callback received');
 
-    if (!url) throw new Error('FRONTEND_URL is not defined');
+      if (!req.user) {
+        this.logger.error('No user found in request');
+        return res.redirect(
+          `${this.configService.get<string>('FRONTEND_URL')}?error=no_user`,
+        );
+      }
 
-    res.cookie('jwt', response.accessToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: COOKIE_MAX_AGE,
-    });
+      this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-    res.redirect(url);
+      const response = await this.authService.findOrCreateUser(
+        req.user,
+        'google',
+      );
+      const url = this.configService.get<string>('FRONTEND_URL');
+
+      if (!url) throw new Error('FRONTEND_URL is not defined');
+
+      res.cookie('jwt', response.accessToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: COOKIE_MAX_AGE,
+      });
+
+      this.logger.log('Google authentication successful, redirecting');
+      res.redirect(url);
+    } catch (error) {
+      this.logger.error('Google callback error:', error);
+      const url = this.configService.get<string>('FRONTEND_URL');
+      res.redirect(`${url}?error=auth_failed`);
+    }
   }
 
   @UseGuards(LinkedInAuthGuard)
@@ -98,7 +115,10 @@ export class AuthController {
 
       this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-      const response = await this.authService.validateOAuthLinkedIn(req.user);
+      const response = await this.authService.findOrCreateUser(
+        req.user,
+        'linkedin',
+      );
       const url = this.configService.get<string>('FRONTEND_URL');
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
