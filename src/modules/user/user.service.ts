@@ -54,9 +54,9 @@ export class UserService {
     return this.usersRepository.save(user);
   }
 
-  async findByFacebookId(id: string): Promise<User | null> {
+  async findByFacebookId(facebookId: string): Promise<User | null> {
     return this.usersRepository.findOne({
-      where: { id },
+      where: { facebookId },
     });
   }
 
