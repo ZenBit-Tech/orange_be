@@ -22,6 +22,10 @@ export class AuthController {
     private configService: ConfigService,
   ) {}
 
+  @UseGuards(GoogleAuthGuard)
+  @Get('google/login')
+  googleLogin() {}
+
   @ApiOperation({ summary: 'Google Auth callback' })
   @ApiResponse({
     status: 200,
