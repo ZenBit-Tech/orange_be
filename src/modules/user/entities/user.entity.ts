@@ -27,8 +27,12 @@ export class User {
   @Column({ unique: true, nullable: true })
   linkedinId?: string;
 
+  @ApiProperty({ description: 'UserId from Facebook' })
+  @Column({ unique: true, nullable: true })
+  facebookId?: string;
+
   @ApiProperty({ description: 'Email of user' })
-  @Column({ unique: true })
+  @Column({ unique: true, nullable: true })
   email: string;
 
   @ApiProperty({ description: 'Full Name of user' })

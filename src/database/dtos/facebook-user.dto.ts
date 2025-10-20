@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
-export class LinkedinUserDto {
+export class FacebookUserDto {
   @ApiProperty({
     example: '6a88ffc6-f771-4d13-849f-f0dc42872980',
-    description: 'Linkedin user ID',
+    description: 'Facebook user ID',
   })
   @IsString()
   @IsNotEmpty()
@@ -15,7 +15,7 @@ export class LinkedinUserDto {
     description: 'User email address',
   })
   @IsEmail()
-  @IsNotEmpty()
+  @IsOptional()
   email: string;
 
   @ApiProperty({

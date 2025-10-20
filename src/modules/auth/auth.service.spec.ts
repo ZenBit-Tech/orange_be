@@ -5,6 +5,7 @@ import { UserService } from '@modules/user/user.service';
 import { User } from '@modules/user/entities/user.entity';
 import { AuthService } from './auth.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -141,7 +142,7 @@ describe('AuthService', () => {
   describe('LinkedIn OAuth', () => {
     it('should return existing user with token', async () => {
       const findByLinkedInIdSpy = jest
-        .spyOn(userService, 'findByLinkedInId')
+        .spyOn(userService, 'findByLinkedinEmail')
         .mockResolvedValueOnce(mockLinkedInUser);
 
       const createLinkedInUserSpy = jest.spyOn(
@@ -170,7 +171,7 @@ describe('AuthService', () => {
 
     it('should create a new user if not found by LinkedIn ID', async () => {
       const findByLinkedInIdSpy = jest
-        .spyOn(userService, 'findByLinkedInId')
+        .spyOn(userService, 'findByLinkedinEmail')
         .mockResolvedValueOnce(null);
 
       const createLinkedInUserSpy = jest
@@ -196,7 +197,7 @@ describe('AuthService', () => {
 
     it('should generate JWT with correct payload for LinkedIn user', async () => {
       jest
-        .spyOn(userService, 'findByLinkedInId')
+        .spyOn(userService, 'findByLinkedinEmail')
         .mockResolvedValueOnce(mockLinkedInUser);
 
       const signSpy = jest
@@ -218,7 +219,7 @@ describe('AuthService', () => {
         .spyOn(userService, 'findByGoogleId')
         .mockResolvedValueOnce(mockGoogleUser);
       jest
-        .spyOn(userService, 'findByLinkedInId')
+        .spyOn(userService, 'findByLinkedinEmail')
         .mockResolvedValueOnce(mockLinkedInUser);
 
       const signSpy = jest
@@ -233,6 +234,97 @@ describe('AuthService', () => {
       expect(signSpy).toHaveBeenCalledTimes(2);
       expect(googleResult.accessToken).toBe('mocked-jwt-token');
       expect(linkedInResult.accessToken).toBe('mocked-jwt-token');
+    });
+  });
+
+  describe('Facebook OAuth', () => {
+    const mockFacebookUser: User = {
+      id: 'user-uuid-123',
+      googleId: '',
+      linkedinId: '',
+      facebookId: 'facebook123',
+      email: 'john.doe@gmail.com',
+      fullName: 'John Doe',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const mockFacebookProfile: FacebookUserDto = {
+      id: 'facebook123',
+      email: 'john.doe@gmail.com',
+      fullName: 'John Doe',
+    };
+
+    it('should return existing user with token', async () => {
+      const findByFacebookIdSpy = jest
+        .spyOn(userService, 'findByFacebookId')
+        .mockResolvedValueOnce(mockFacebookUser);
+
+      const createFacebookUserSpy = jest.spyOn(
+        userService,
+        'createFacebookUser',
+      );
+
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
+
+      const result: AuthResponseDto =
+        await authService.validateOAuthFacebook(mockFacebookProfile);
+
+      expect(findByFacebookIdSpy).toHaveBeenCalledWith('facebook123');
+      expect(createFacebookUserSpy).not.toHaveBeenCalled();
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockFacebookUser.id,
+        email: mockFacebookUser.email,
+      });
+      expect(result).toEqual({
+        accessToken: 'mocked-jwt-token',
+        user: mockFacebookUser,
+      });
+    });
+
+    it('should create a new user if not found by Facebook ID', async () => {
+      const findByFacebookIdSpy = jest
+        .spyOn(userService, 'findByFacebookId')
+        .mockResolvedValueOnce(null);
+
+      const createFacebookUserSpy = jest
+        .spyOn(userService, 'createFacebookUser')
+        .mockResolvedValueOnce(mockFacebookUser);
+
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
+
+      const result: AuthResponseDto =
+        await authService.validateOAuthFacebook(mockFacebookProfile);
+
+      expect(findByFacebookIdSpy).toHaveBeenCalledWith('facebook123');
+      expect(createFacebookUserSpy).toHaveBeenCalledWith(mockFacebookProfile);
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockFacebookUser.id,
+        email: mockFacebookUser.email,
+      });
+      expect(result.accessToken).toBe('mocked-jwt-token');
+      expect(result.user).toEqual(mockFacebookUser);
+    });
+
+    it('should generate JWT with correct payload for Facebook user', async () => {
+      jest
+        .spyOn(userService, 'findByFacebookId')
+        .mockResolvedValueOnce(mockFacebookUser);
+
+      const signSpy = jest
+        .spyOn(jwtService, 'sign')
+        .mockReturnValue('mocked-jwt-token');
+
+      await authService.validateOAuthFacebook(mockFacebookProfile);
+
+      expect(signSpy).toHaveBeenCalledWith({
+        sub: mockFacebookUser.id,
+        email: mockFacebookUser.email,
+      });
     });
   });
 });
