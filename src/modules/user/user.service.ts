@@ -1,9 +1,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { User } from './entities/user.entity';
-import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
+import { CreateUserDto } from '@modules/auth/dto/create-user-dto';
 import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 @Injectable()
 export class UserService {
@@ -12,18 +11,17 @@ export class UserService {
     private usersRepository: Repository<User>,
   ) {}
 
-  async findByGoogleId(googleId: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { googleId } });
+  async create(createUserDto: CreateUserDto): Promise<User> {
+    const newUser = this.usersRepository.create(createUserDto);
+    return this.usersRepository.save(newUser);
   }
 
-  async createGoogleUser(profile: GoogleUserDto): Promise<User> {
-    const newUser = this.usersRepository.create({
-      googleId: profile.id,
-      email: profile.email,
-      fullName: profile.fullName,
-    });
+  async findByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { email } });
+  }
 
-    return this.usersRepository.save(newUser);
+  async update(user: User): Promise<User> {
+    return this.usersRepository.save(user);
   }
 
   async getMe(userId: string): Promise<User> {
@@ -37,21 +35,6 @@ export class UserService {
     }
 
     return user;
-  }
-
-  async findByLinkedinEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: { email },
-    });
-  }
-
-  async createLinkedInUser(profile: LinkedinUserDto): Promise<User> {
-    const user = this.usersRepository.create({
-      linkedinId: profile.id,
-      email: profile.email,
-      fullName: profile.fullName,
-    });
-    return this.usersRepository.save(user);
   }
 
   async findByFacebookId(facebookId: string): Promise<User | null> {
