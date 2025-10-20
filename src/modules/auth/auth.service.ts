@@ -12,6 +12,7 @@ import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { GoogleUserDto } from '@database/dtos/google-user.dto';
 import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 import { UserService } from '@modules/user/user.service';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { MagicLink } from './entities/magic-link.entity';
@@ -141,10 +142,28 @@ export class AuthService {
   async validateOAuthLinkedIn(
     profile: LinkedinUserDto,
   ): Promise<AuthResponseDto> {
-    let user = await this.usersService.findByLinkedInId(profile.id);
+    let user = await this.usersService.findByLinkedinEmail(profile.email);
 
     if (!user) {
       user = await this.usersService.createLinkedInUser(profile);
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    const jwt = this.jwtService.sign(payload);
+
+    return {
+      accessToken: jwt,
+      user,
+    };
+  }
+
+  async validateOAuthFacebook(
+    profile: FacebookUserDto,
+  ): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByFacebookId(profile.id);
+
+    if (!user) {
+      user = await this.usersService.createFacebookUser(profile);
     }
 
     const payload = { sub: user.id, email: user.email };

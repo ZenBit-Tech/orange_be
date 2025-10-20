@@ -4,11 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { UserModule } from '@modules/user/user.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './strategies/google-strategy';
 import { LinkedInStrategy } from './strategies/linkedin.strategy';
 import { MagicLink } from './entities/magic-link.entity';
+import { FacebookStrategy } from './strategies/facebook.strategy';
 
 @Module({
   imports: [
@@ -26,9 +28,10 @@ import { MagicLink } from './entities/magic-link.entity';
       }),
     }),
     forwardRef(() => UserModule),
+    TypeOrmModule.forFeature([]),
   ],
-  providers: [AuthService, GoogleStrategy, LinkedInStrategy],
+  providers: [AuthService, GoogleStrategy, LinkedInStrategy, FacebookStrategy],
   controllers: [AuthController],
-  exports: [JwtModule],
+  exports: [JwtModule, TypeOrmModule],
 })
 export class AuthModule {}

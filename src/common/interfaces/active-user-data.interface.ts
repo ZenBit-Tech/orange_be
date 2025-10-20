@@ -1,3 +1,4 @@
 export interface ActiveUserData {
-  jwt: string;
+  id: string;
+  email: string;
 }
