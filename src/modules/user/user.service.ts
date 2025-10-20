@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from '@modules/auth/dto/create-user-dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 @Injectable()
 export class UserService {
   constructor(
@@ -34,5 +35,20 @@ export class UserService {
     }
 
     return user;
+  }
+
+  async findByFacebookId(facebookId: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { facebookId },
+    });
+  }
+
+  async createFacebookUser(profile: FacebookUserDto): Promise<User> {
+    const user = this.usersRepository.create({
+      facebookId: profile.id,
+      email: profile.email,
+      fullName: profile.fullName,
+    });
+    return this.usersRepository.save(user);
   }
 }

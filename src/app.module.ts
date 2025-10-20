@@ -2,15 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService, ConfigType } from '@nestjs/config';
 import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { databaseConfig } from '@config/database.config';
+import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from '@modules/auth/auth.module';
-import { GoogleStrategy } from '@modules/auth/strategies/google-strategy';
-import googleOauthConfig from '@config/google-oauth.config';
 import { UserModule } from '@modules/user/user.module';
+import { databaseConfig } from '@config/database.config';
+import googleOauthConfig from '@config/google-oauth.config';
+import facebookOauthConfig from '@config/facebook-oauth.config';
 import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
 import linkedinAuth from '@config/linkedin-oauth.config';
-import { APP_GUARD } from '@nestjs/core';
+import { FilesModule } from './modules/files/files.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -26,7 +27,13 @@ type AppConfig = {
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [databaseConfig, googleOauthConfig, jwtConfig, linkedinAuth],
+      load: [
+        databaseConfig,
+        googleOauthConfig,
+        jwtConfig,
+        facebookOauthConfig,
+        linkedinAuth,
+      ],
       validate,
     }),
 
@@ -42,13 +49,13 @@ type AppConfig = {
 
     UserModule,
     AuthModule,
+    FilesModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
-    GoogleStrategy,
   ],
   controllers: [],
 })

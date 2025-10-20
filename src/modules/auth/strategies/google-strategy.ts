@@ -7,7 +7,7 @@ import {
   Profile,
 } from 'passport-google-oauth20';
 import { ConfigService } from '@nestjs/config';
-import { GoogleUserDto } from '@database/dtos/google-user.dto';
+import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 
 interface GoogleProfile {
   id: string;
@@ -42,12 +42,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         );
         return;
       }
-      const user: GoogleUserDto & {
+      const user: OAuthUserDto & {
         accessToken: string;
         refreshToken: string;
       } = {
         id: typedProfile.id,
-        email: typedProfile.emails?.[0]?.value,
+        email: typedProfile.emails?.[0]?.value as string,
         fullName: typedProfile.displayName,
         accessToken,
         refreshToken,

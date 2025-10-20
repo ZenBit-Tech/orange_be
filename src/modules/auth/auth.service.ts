@@ -9,6 +9,7 @@ import { UserService } from '@modules/user/user.service';
 import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 import { CreateUserDto } from './dto/create-user-dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -79,5 +80,23 @@ export class AuthService {
         'An error occured during authentication.',
       );
     }
+  }
+
+  async validateOAuthFacebook(
+    profile: FacebookUserDto,
+  ): Promise<AuthResponseDto> {
+    let user = await this.usersService.findByFacebookId(profile.id);
+
+    if (!user) {
+      user = await this.usersService.createFacebookUser(profile);
+    }
+
+    const payload = { sub: user.id, email: user.email };
+    const jwt = this.jwtService.sign(payload);
+
+    return {
+      accessToken: jwt,
+      user,
+    };
   }
 }
