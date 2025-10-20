@@ -68,7 +68,7 @@ export class AuthService {
       expiresAt.setHours(expiresAt.getHours() + 24);
 
       const magicLink = this.magicLinkRepository.create({
-        userId: user.id,
+        user: user,
         token,
         expiresAt,
       });
@@ -81,7 +81,7 @@ export class AuthService {
       await this.transporter.sendMail({
         from: this.configService.get<string>('MAIL_FROM'),
         to: email,
-        subject: 'Your Magic Link',
+        subject: 'Your PlasmaAI access link',
         html: emailTemplate(magicLinkUrl),
       });
 
@@ -105,7 +105,7 @@ export class AuthService {
       }
       const magicLink = await this.magicLinkRepository.findOne({
         where: {
-          userId: user.id,
+          user: user,
           token,
         },
       });

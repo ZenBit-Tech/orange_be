@@ -11,7 +11,7 @@ export const databaseConfig = registerAs('database', () => ({
   database: process.env.DB_NAME || 'ailab',
   autoLoadEntities: true,
   synchronize: true,
-  entities: [Example, User, MagicLink],
+  entities: [User, MagicLink],
   migrations: [
     '@src/database/migrations/*.ts',
     '@dist/database/migrations/*.js',

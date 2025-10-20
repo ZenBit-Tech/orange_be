@@ -21,7 +21,7 @@ import { MagicLink } from './entities/magic-link.entity';
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('jwt.secret'),
         signOptions: {
-          expiresIn: config.getOrThrow<string>('jwt.accessTokenTtl'),
+          expiresIn: parseInt(config.getOrThrow<string>('jwt.accessTokenTtl')),
         },
       }),
     }),
