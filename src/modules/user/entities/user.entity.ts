@@ -20,11 +20,11 @@ export class User {
   id: string;
 
   @ApiProperty({ description: 'UserId from Google' })
-  @Column({ unique: true, nullable: true })
-  googleId: string;
+  @Column({ nullable: true })
+  googleId?: string;
 
   @ApiProperty({ description: 'UserId from Linkedin' })
-  @Column({ unique: true, nullable: true })
+  @Column({ nullable: true })
   linkedinId?: string;
 
   @ApiProperty({ description: 'UserId from Facebook' })

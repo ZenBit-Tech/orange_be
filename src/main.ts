@@ -5,6 +5,8 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 import session, { SessionOptions } from 'express-session';
 import passport from 'passport';
+import helmet from 'helmet';
+import compression from 'compression';
 import { COOKIE_SECURE } from '@common/constants';
 import cookieParser from 'cookie-parser';
 import { TransformInterceptor } from '@common/interceptors/transform.interceptor';
@@ -39,6 +41,10 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .build();
+
+  app.use(helmet());
+
+  app.use(compression());
 
   app.use(
     (session as (options?: SessionOptions) => any)({

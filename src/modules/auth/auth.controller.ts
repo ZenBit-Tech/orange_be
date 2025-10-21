@@ -14,9 +14,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
-
-import { COOKIE_MAX_AGE } from '@common/constants';
-
+import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 import { AuthService } from './auth.service';
 import {
   AuthResponseDto,
@@ -25,21 +23,16 @@ import {
 } from './dto/auth-response.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { LinkedInAuthGuard } from './guards/linkedin-auth.guard';
+import { COOKIE_MAX_AGE } from '@common/constants';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
 
-interface User {
-  id: string;
-  email: string;
-}
-
 interface RequestWithUser extends Request {
-  user: User;
+  user: OAuthUserDto;
 }
 
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
-
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
@@ -65,19 +58,40 @@ export class AuthController {
     @Req() req: RequestWithUser,
     @Res() res: Response,
   ): Promise<void> {
-    const response = await this.authService.validateOAuthLogin(req.user);
-    const url = this.configService.get<string>('FRONTEND_URL');
+    try {
+      this.logger.log('Google callback received');
 
-    if (!url) throw new Error('FRONTEND_URL is not defined');
+      if (!req.user) {
+        this.logger.error('No user found in request');
+        return res.redirect(
+          `${this.configService.get<string>('FRONTEND_URL')}?error=no_user`,
+        );
+      }
 
-    res.cookie('jwt', response.accessToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: 'lax',
-      maxAge: COOKIE_MAX_AGE,
-    });
+      this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-    res.redirect(url);
+      const response = await this.authService.findOrCreateUser(
+        req.user,
+        'google',
+      );
+      const url = this.configService.get<string>('FRONTEND_URL');
+
+      if (!url) throw new Error('FRONTEND_URL is not defined');
+
+      res.cookie('jwt', response.accessToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: COOKIE_MAX_AGE,
+      });
+
+      this.logger.log('Google authentication successful, redirecting');
+      res.redirect(url);
+    } catch (error) {
+      this.logger.error('Google callback error:', error);
+      const url = this.configService.get<string>('FRONTEND_URL');
+      res.redirect(`${url}?error=auth_failed`);
+    }
   }
 
   @Post('send-link')
@@ -170,7 +184,10 @@ export class AuthController {
 
       this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-      const response = await this.authService.validateOAuthLinkedIn(req.user);
+      const response = await this.authService.findOrCreateUser(
+        req.user,
+        'linkedin',
+      );
       const url = this.configService.get<string>('FRONTEND_URL');
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
