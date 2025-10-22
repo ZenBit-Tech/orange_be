@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Injectable,
   UnauthorizedException,
-   InternalServerErrorException,
+  InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -12,14 +12,11 @@ import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
-import { GoogleUserDto } from '@database/dtos/google-user.dto';
-import { LinkedinUserDto } from '@database/dtos/linkedin-user.dto';
 import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
 import { UserService } from '@modules/user/user.service';
 import { CreateUserDto } from './dto/create-user-dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { UserService } from '@modules/user/user.service';
 import { MagicLink } from './entities/magic-link.entity';
 import { emailTemplate } from 'utils/emailTemplates/magicLink';
 
@@ -46,8 +43,8 @@ export class AuthService {
     };
 
     this.transporter = nodemailer.createTransport(smtpTransport);
-  };
-  
+  }
+
   async findOrCreateUser(
     profile: OAuthUserDto,
     provider: 'google' | 'linkedin',
@@ -87,7 +84,7 @@ export class AuthService {
         };
         user = await this.usersService.create(createUser);
       }
-       const payload = { sub: user.id, email: user.email };
+      const payload = { sub: user.id, email: user.email };
 
       const jwt = this.jwtService.sign(payload);
 
@@ -192,7 +189,7 @@ export class AuthService {
         'Token verification failed. Please try again.',
       );
     }
-  };
+  }
 
   async validateOAuthFacebook(
     profile: FacebookUserDto,
