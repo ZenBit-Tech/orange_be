@@ -24,6 +24,13 @@ export class UserService {
     return this.usersRepository.save(user);
   }
 
+  async create(data: { email: string }): Promise<User> {
+    const newUser = this.usersRepository.create({
+      email: data.email,
+    });
+
+    return this.usersRepository.save(newUser);
+  }
   async getMe(userId: string): Promise<User> {
     const user = await this.usersRepository.findOne({
       where: {

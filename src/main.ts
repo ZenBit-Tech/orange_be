@@ -1,7 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import session from 'express-session';
+import { ConfigService } from '@nestjs/config';
+import session, { SessionOptions } from 'express-session';
 import passport from 'passport';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -13,6 +14,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const configService = app.get(ConfigService);
   app.enableCors({
     origin: process.env.FRONTEND_URL,
     methods: 'Get, Post, Put, Delete',
@@ -44,7 +46,7 @@ async function bootstrap() {
   app.use(compression());
 
   app.use(
-    session({
+    (session as (options?: SessionOptions) => any)({
       secret: process.env.SESSION_SECRET || 'someRandomSecret',
       resave: false,
       saveUninitialized: false,
@@ -60,6 +62,12 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
+
+  app.enableCors({
+    origin: [configService.get<string>('FRONTEND_URL')],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`app started on PORT ${process.env.PORT ?? 3000}`);
