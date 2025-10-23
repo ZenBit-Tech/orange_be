@@ -158,7 +158,7 @@ export class AuthService {
       }
       const magicLink = await this.magicLinkRepository.findOne({
         where: {
-          user: user,
+          user: { id: user.id },
           token,
         },
       });
