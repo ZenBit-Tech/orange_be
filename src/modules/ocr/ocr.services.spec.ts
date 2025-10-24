@@ -8,7 +8,7 @@ jest.mock('@modules/ocr', () => ({
   extractBloodTestData: jest.fn(),
 }));
 
-import { extractBloodTestData } from '@modules/ocr';
+import { extractBloodTestData } from '@modules/ocr/extract-blood-test';
 
 describe('OcrService', () => {
   let service: OcrService;

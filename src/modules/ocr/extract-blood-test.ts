@@ -2,10 +2,11 @@ import sharp from 'sharp';
 import { createWorker, PSM, RecognizeResult } from 'tesseract.js';
 import fs from 'fs';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
-import { patterns } from '@common/constants';
+import { Marker } from '@modules/marker/entities/marker.entity';
 
 export async function extractBloodTestData(
   inputPath: string,
+  markers: Marker[],
 ): Promise<BloodTestData> {
   const cleaned = inputPath.replace('.png', '_clean.png');
 
@@ -18,7 +19,7 @@ export async function extractBloodTestData(
 
   console.log('✓ Preprocessing complete');
 
-  const worker = await createWorker(['ukr', 'eng'], 1);
+  const worker = await createWorker(['ukr', 'eng', 'pol'], 1);
 
   await worker.setParameters({
     tessedit_pageseg_mode: PSM.AUTO,
@@ -31,10 +32,15 @@ export async function extractBloodTestData(
   const rawOcrPath = inputPath.replace('.png', '_ocr_raw.txt');
   fs.writeFileSync(rawOcrPath, result.data.text);
 
-  return parseBloodTest(result.data.text);
+  console.log('✓ OCR complete');
+
+  return parseBloodTestWithMarkers(result.data.text, markers);
 }
 
-function parseBloodTest(text: string): BloodTestData {
+function parseBloodTestWithMarkers(
+  text: string,
+  markers: Marker[],
+): BloodTestData {
   const data: BloodTestData = {
     patientInfo: {},
     lipids: {},
@@ -43,63 +49,42 @@ function parseBloodTest(text: string): BloodTestData {
     liverFunction: {},
   };
 
-  for (const [key, pattern] of Object.entries(patterns)) {
-    const match = text.match(pattern);
-    if (match && match[1]) {
-      const value = match[1];
-      const numValue = normalizeNumber(value, key);
+  console.log(`Processing ${markers.length} markers`);
 
-      if (['age', 'sex', 'dob'].includes(key)) {
-        data.patientInfo[key] = key === 'age' ? numValue : value;
-      } else if (
-        [
-          'triglycerides',
-          'cholesterol',
-          'hdl',
-          'ldl',
-          'vldl',
-          'atherogenicCoeff',
-        ].includes(key)
-      ) {
-        data.lipids[key] = numValue;
-      } else if (
-        [
-          'wbc',
-          'rbc',
-          'hemoglobin',
-          'hematocrit',
-          'mcv',
-          'mch',
-          'mchc',
-          'plt',
-          'rdwsd',
-          'rdwcv',
-          'pdw',
-          'mpv',
-          'neutrophils',
-          'lymphocytes',
-          'monocytes',
-          'eosinophils',
-          'basophils',
-        ].includes(key)
-      ) {
-        data.bloodAll[key] = numValue;
-      } else if (
-        [
-          'glucose',
-          'alt',
-          'ast',
-          'ggt',
-          'alp',
-          'albumin',
-          'totalBilirubin',
-          'directBilirubin',
-        ].includes(key)
-      ) {
-        data.liverFunction[key] = numValue;
-      } else if (['creatinine', 'uricAcid'].includes(key)) {
-        data.kidneyFunction[key] = numValue;
+  for (const marker of markers) {
+    try {
+      const pattern = new RegExp(marker.pattern, 'i');
+      const match = text.match(pattern);
+
+      if (match && match[1]) {
+        const value = match[1];
+        const numValue = normalizeNumber(value, marker.key);
+
+        console.log(`✓ Found ${marker.key}: ${numValue}`);
+
+        switch (marker.category) {
+          case 'patientInfo':
+            data.patientInfo[marker.key] =
+              marker.key === 'age' ? numValue : value;
+            break;
+          case 'lipids':
+            data.lipids[marker.key] = numValue;
+            break;
+          case 'bloodAll':
+            data.bloodAll[marker.key] = numValue;
+            break;
+          case 'liverFunction':
+            data.liverFunction[marker.key] = numValue;
+            break;
+          case 'kidneyFunction':
+            data.kidneyFunction[marker.key] = numValue;
+            break;
+        }
       }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      console.error(`Error processing marker ${marker.key}:`, errorMessage);
     }
   }
 
@@ -131,8 +116,8 @@ function normalizeNumber(value: string, key: string): number {
   if (!/[.,]/.test(normalized) && /^\d+$/.test(normalized)) {
     const num = parseInt(normalized, 10);
 
-    if (isLipid) {
-      if (num >= 10) normalized = (num / 100).toFixed(2);
+    if (isLipid && num >= 10) {
+      normalized = (num / 100).toFixed(2);
     } else if (isBiochemSmall && num >= 100) {
       normalized = (num / 100).toFixed(2);
     }
