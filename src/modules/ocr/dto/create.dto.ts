@@ -1,5 +1,6 @@
 import { IsNotEmpty } from 'class-validator';
-export class CreateFileDto {
+
+export class CreateOcrDto {
   @IsNotEmpty()
   data: string;
 }

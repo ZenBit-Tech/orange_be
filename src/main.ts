@@ -10,6 +10,7 @@ import { COOKIE_SECURE } from '@common/constants';
 import cookieParser from 'cookie-parser';
 import { TransformInterceptor } from '@common/interceptors/transform.interceptor';
 import { AppModule } from './app.module';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,6 +22,9 @@ async function bootstrap() {
     credentials: true,
   });
   app.use(cookieParser());
+
+  app.use(bodyParser.json({ limit: '30mb' }));
+  app.use(bodyParser.urlencoded({ limit: '30mb', extended: true }));
 
   app.useGlobalInterceptors(new TransformInterceptor());
 
