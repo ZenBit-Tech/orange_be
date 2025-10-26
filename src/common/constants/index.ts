@@ -7,7 +7,8 @@ export const AUTHORIZATION_URL =
   'https://www.linkedin.com/oauth/v2/authorization';
 export const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 export const USER_INFO_URL = 'https://api.linkedin.com/v2/userinfo';
-export const BASE64_PATTERN = /^image\/(png|jpg|jpeg);base64,/;
+export const BASE64_PATTERN =
+  /^data:(image\/(png|jpg|jpeg)|application\/pdf);base64,/i;
 
 export const SUPPORTED_LANGUAGES = ['en', 'uk', 'pl'];
 

@@ -1,5 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { createWorker, PSM, RecognizeResult } from 'tesseract.js';
+import sharp from 'sharp';
+import { pdf } from 'pdf-to-img';
 import {
   BadRequestException,
   Injectable,
@@ -7,8 +10,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createWorker, PSM, RecognizeResult } from 'tesseract.js';
-import sharp from 'sharp';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BASE64_PATTERN } from '@common/constants';
 import { MarkerService } from '@modules/marker/marker.service';
@@ -18,6 +19,8 @@ import { CreateOcrDto } from './dto/create.dto';
 interface LanguageKeywords {
   [key: string]: string[];
 }
+
+type FileType = 'png' | 'jpg' | 'jpeg' | 'pdf';
 
 @Injectable()
 export class OcrService {
@@ -96,10 +99,12 @@ export class OcrService {
 
     this.validateBase64Input(data);
 
-    const parts = data.split(';base64,');
-    const base64Image = parts[1];
+    const fileType = this.validateAndDetectFileType(data);
 
-    const bufferSize = Buffer.from(base64Image, 'base64').length;
+    const parts = data.split(';base64,');
+    const base64Content = parts[1];
+
+    const bufferSize = Buffer.from(base64Content, 'base64').length;
     if (bufferSize > this.maxFileSize) {
       throw new BadRequestException(
         `File size exceeds maximum allowed size of ${this.maxFileSize} bytes`,
@@ -112,13 +117,20 @@ export class OcrService {
 
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substring(7);
-    const filename = `output_${timestamp}_${randomStr}.png`;
+    const extension = fileType === 'pdf' ? 'pdf' : 'jpg';
+    const filename = `upload_${timestamp}_${randomStr}.${extension}`;
     const filePath = path.join(this.uploadDir, filename);
 
     try {
-      fs.writeFileSync(filePath, Buffer.from(base64Image, 'base64'));
+      fs.writeFileSync(filePath, Buffer.from(base64Content, 'base64'));
 
-      const result = await this.extractWithLanguageDetection(filePath);
+      let result: BloodTestData;
+
+      if (fileType === 'pdf') {
+        result = await this.processPdfFile(filePath);
+      } else {
+        result = await this.processImageFile(filePath);
+      }
 
       this.cleanupTemporaryFiles(filePath);
 
@@ -133,26 +145,81 @@ export class OcrService {
         throw error;
       }
 
-      console.error('OCR processing error:', error);
+      this.logger.error('OCR processing error:', error);
       throw new InternalServerErrorException(
         'Failed to extract blood test data',
       );
     }
   }
 
-  private async extractWithLanguageDetection(
-    inputPath: string,
-  ): Promise<BloodTestData> {
-    const cleaned = inputPath.replace('.png', '_clean.png');
+  private validateAndDetectFileType(data: string): FileType {
+    if (!data || data.trim().length === 0) {
+      throw new BadRequestException('File data cannot be empty');
+    }
 
-    await sharp(inputPath)
+    const imagePattern = /^data:image\/(png|jpg|jpeg);base64,/i;
+    const pdfPattern = /^data:application\/pdf;base64,/i;
+
+    if (imagePattern.test(data)) {
+      const match = data.match(imagePattern);
+      return match![1].toLowerCase() as FileType;
+    }
+
+    if (pdfPattern.test(data)) {
+      return 'pdf';
+    }
+
+    throw new BadRequestException(
+      'Invalid file format. Supported formats: PNG, JPG, JPEG, PDF',
+    );
+  }
+
+  private async processPdfFile(pdfPath: string): Promise<BloodTestData> {
+    this.logger.log('Processing PDF file...');
+
+    const allExtractedData: BloodTestData[] = [];
+    const tempImagePaths: string[] = [];
+
+    try {
+      const document = await pdf(pdfPath, { scale: 2.0 });
+      let pageNum = 0;
+
+      for await (const image of document) {
+        pageNum++;
+        this.logger.log(`Processing page ${pageNum}`);
+
+        const imagePath = pdfPath.replace('.pdf', `_page${pageNum}.png`);
+        fs.writeFileSync(imagePath, image);
+        tempImagePaths.push(imagePath);
+
+        const pageData = await this.processImageFile(imagePath);
+        allExtractedData.push(pageData);
+      }
+
+      this.logger.log(`PDF has ${pageNum} page(s)`);
+    } finally {
+      // Cleanup temporary image files
+      tempImagePaths.forEach((imgPath) => {
+        if (fs.existsSync(imgPath)) {
+          fs.unlinkSync(imgPath);
+        }
+      });
+    }
+
+    return this.mergeBloodTestData(allExtractedData);
+  }
+
+  private async processImageFile(imagePath: string): Promise<BloodTestData> {
+    const cleaned = imagePath.replace(/\.(png|jpg|jpeg)$/i, '_clean.png');
+
+    await sharp(imagePath)
       .grayscale()
       .normalise()
       .sharpen()
       .resize({ width: 3000 })
       .toFile(cleaned);
 
-    this.logger.log(' Preprocessing complete');
+    this.logger.log('Preprocessing complete');
 
     const worker = await createWorker(['ukr', 'eng', 'pol'], 1);
 
@@ -164,7 +231,7 @@ export class OcrService {
     const result: RecognizeResult = await worker.recognize(cleaned);
     await worker.terminate();
 
-    const rawOcrPath = inputPath.replace('.png', '_ocr_raw.txt');
+    const rawOcrPath = imagePath.replace(/\.(png|jpg|jpeg)$/i, '_ocr_raw.txt');
     fs.writeFileSync(rawOcrPath, result.data.text);
 
     this.logger.log('OCR complete');
@@ -186,7 +253,38 @@ export class OcrService {
       markers,
     );
 
+    // Cleanup temporary files
+    if (fs.existsSync(cleaned)) {
+      fs.unlinkSync(cleaned);
+    }
+    if (fs.existsSync(rawOcrPath)) {
+      fs.unlinkSync(rawOcrPath);
+    }
+
     return bloodTestData;
+  }
+
+  private mergeBloodTestData(dataArray: BloodTestData[]): BloodTestData {
+    const merged: BloodTestData = {
+      patientInfo: {},
+      lipids: {},
+      bloodAll: {},
+      kidneyFunction: {},
+      liverFunction: {},
+    };
+
+    for (const data of dataArray) {
+      merged.patientInfo = { ...merged.patientInfo, ...data.patientInfo };
+      merged.lipids = { ...merged.lipids, ...data.lipids };
+      merged.bloodAll = { ...merged.bloodAll, ...data.bloodAll };
+      merged.kidneyFunction = {
+        ...merged.kidneyFunction,
+        ...data.kidneyFunction,
+      };
+      merged.liverFunction = { ...merged.liverFunction, ...data.liverFunction };
+    }
+
+    return merged;
   }
 
   private detectLanguageFromText(text: string): string {
@@ -262,7 +360,10 @@ export class OcrService {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
-        console.error(`  Error processing marker ${marker.key}:`, errorMessage);
+        this.logger.error(
+          `Error processing marker ${marker.key}:`,
+          errorMessage,
+        );
       }
     }
 
@@ -311,25 +412,48 @@ export class OcrService {
 
     if (!BASE64_PATTERN.test(data)) {
       throw new BadRequestException(
-        'Invalid base64 image format. Expected format: data:image/[png|jpg|jpeg];base64,[data]',
+        'Invalid base64 format. Expected format: data:image/[png|jpg|jpeg];base64,[data] or data:application/pdf;base64,[data]',
       );
     }
   }
 
   private cleanupTemporaryFiles(basePath: string): void {
-    const filesToClean = [
+    const patterns = [
       basePath,
-      basePath.replace('.png', '_clean.png'),
-      basePath.replace('.png', '_ocr_raw.txt'),
+      basePath.replace(/\.(png|jpg|jpeg|pdf)$/i, '_clean.png'),
+      basePath.replace(/\.(png|jpg|jpeg|pdf)$/i, '_ocr_raw.txt'),
     ];
 
-    for (const file of filesToClean) {
+    // For PDF files, also clean up page images
+    if (basePath.endsWith('.pdf')) {
+      const basePathWithoutExt = basePath.replace('.pdf', '');
+      const dir = path.dirname(basePath);
+
+      if (fs.existsSync(dir)) {
+        const files = fs.readdirSync(dir);
+        files.forEach((file) => {
+          if (
+            file.startsWith(path.basename(basePathWithoutExt)) &&
+            file.includes('_page')
+          ) {
+            const filePath = path.join(dir, file);
+            try {
+              fs.unlinkSync(filePath);
+            } catch (error) {
+              this.logger.error(`Failed to cleanup file ${filePath}:`, error);
+            }
+          }
+        });
+      }
+    }
+
+    for (const file of patterns) {
       try {
         if (fs.existsSync(file)) {
           fs.unlinkSync(file);
         }
       } catch (error) {
-        console.error(`Failed to cleanup file ${file}:`, error);
+        this.logger.error(`Failed to cleanup file ${file}:`, error);
       }
     }
   }
