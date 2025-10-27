@@ -12,6 +12,7 @@ import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
 import linkedinAuth from '@config/linkedin-oauth.config';
 import { OcrModule } from '@modules/ocr/ocr.module';
+import { BloodTestModule } from '@modules/BloodTest/bloodTest.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -50,6 +51,7 @@ type AppConfig = {
     UserModule,
     AuthModule,
     OcrModule,
+    BloodTestModule,
   ],
   providers: [
     {

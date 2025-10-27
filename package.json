@@ -50,6 +50,7 @@
     "ioredis": "^5.8.1",
     "mysql2": "^3.15.1",
     "nodemailer": "^7.0.9",
+    "openai": "^6.7.0",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",

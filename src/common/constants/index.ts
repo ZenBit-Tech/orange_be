@@ -1,3 +1,5 @@
+import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
+
 /* eslint-disable no-useless-escape */
 export const REQUEST_USER_KEY = 'user';
 export const COOKIE_MAX_AGE = 1000 * 60 * 60 * 24;
@@ -1219,3 +1221,30 @@ export const markers = [
     max: 5.89,
   },
 ];
+
+export const getValidationPrompt = (values: BloodTestData): string => `
+You are a medical data validation assistant.
+
+Your task: Determine if the provided object represents actual blood test results.
+
+Criteria for a valid blood test:
+1. Contains at least 3 medical parameters with numeric values
+2. Values are within realistic physiological ranges (not random numbers)
+3. Has proper medical terminology (e.g., glucose, hemoglobin, cholesterol)
+4. May contain a "question" or "userQuestion" field (ignore it for validation)
+
+Invalid examples:
+- Random numeric data without medical context
+- Only 1-2 values
+- Completely unrealistic values (e.g., glucose = 1000)
+
+Data to validate:
+${JSON.stringify(values, null, 2)}
+
+Respond ONLY with valid JSON (no markdown):
+{
+  "isBloodTest": boolean,
+  "reason": "brief explanation",
+  "confidence": "low" | "medium" | "high"
+}
+`;

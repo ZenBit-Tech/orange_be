@@ -1,9 +1,13 @@
-export interface BloodTestData {
+export type BloodTestData = {
   patientInfo: PatientInfo;
   lipids: LipidProfile;
   bloodAll: BloodCount;
   liverFunction: LiverFunction;
   kidneyFunction: KidneyFunction;
+};
+
+export interface BloodTestDataValidation extends BloodTestData {
+  validation: BloodTestValidation;
 }
 
 export interface PatientInfo {
@@ -55,4 +59,10 @@ export interface LiverFunction {
 export interface KidneyFunction {
   creatinine?: number;
   uricAcid?: number;
+}
+
+export interface BloodTestValidation {
+  isBloodTest: boolean;
+  reason: string;
+  confidence: 'low' | 'medium' | 'high';
 }

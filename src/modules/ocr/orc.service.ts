@@ -10,12 +10,15 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
+import {
+  BloodTestData,
+  BloodTestDataValidation,
+} from '@common/interfaces/blood-test-data.interface';
 import { BASE64_PATTERN } from '@common/constants';
 import { MarkerService } from '@modules/marker/marker.service';
 import { Marker } from '@modules/marker/entities/marker.entity';
 import { CreateOcrDto } from './dto/create.dto';
-
+import { BloodTestService } from '@modules/BloodTest/bloodTest.service';
 interface LanguageKeywords {
   [key: string]: string[];
 }
@@ -86,6 +89,7 @@ export class OcrService {
   constructor(
     private readonly configService: ConfigService,
     private readonly markerService: MarkerService,
+    private readonly bloodTestService: BloodTestService,
   ) {
     this.uploadDir =
       this.configService.get<string>('UPLOAD_DIR') ||
@@ -94,7 +98,7 @@ export class OcrService {
       this.configService.get<number>('MAX_FILE_SIZE') || 31457280;
   }
 
-  async create(createFileDto: CreateOcrDto): Promise<BloodTestData> {
+  async create(createFileDto: CreateOcrDto): Promise<BloodTestDataValidation> {
     const { data } = createFileDto;
 
     this.validateBase64Input(data);
@@ -134,7 +138,8 @@ export class OcrService {
 
       this.cleanupTemporaryFiles(filePath);
 
-      return result;
+      const validation = await this.bloodTestService.validateBloodTest(result);
+      return { ...result, validation };
     } catch (error) {
       this.cleanupTemporaryFiles(filePath);
 
