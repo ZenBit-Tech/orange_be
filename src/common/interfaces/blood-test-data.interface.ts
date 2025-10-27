@@ -1,13 +1,9 @@
-export type BloodTestData = {
+export interface BloodTestData {
   patientInfo: PatientInfo;
   lipids: LipidProfile;
   bloodAll: BloodCount;
   liverFunction: LiverFunction;
   kidneyFunction: KidneyFunction;
-};
-
-export interface BloodTestDataValidation extends BloodTestData {
-  validation: BloodTestValidation;
 }
 
 export interface PatientInfo {

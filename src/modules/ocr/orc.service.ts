@@ -10,15 +10,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  BloodTestData,
-  BloodTestDataValidation,
-} from '@common/interfaces/blood-test-data.interface';
+import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BASE64_PATTERN } from '@common/constants';
 import { MarkerService } from '@modules/marker/marker.service';
 import { Marker } from '@modules/marker/entities/marker.entity';
 import { CreateOcrDto } from './dto/create.dto';
-import { BloodTestService } from '@modules/BloodTest/bloodTest.service';
 interface LanguageKeywords {
   [key: string]: string[];
 }
@@ -89,7 +85,6 @@ export class OcrService {
   constructor(
     private readonly configService: ConfigService,
     private readonly markerService: MarkerService,
-    private readonly bloodTestService: BloodTestService,
   ) {
     this.uploadDir =
       this.configService.get<string>('UPLOAD_DIR') ||
@@ -98,7 +93,7 @@ export class OcrService {
       this.configService.get<number>('MAX_FILE_SIZE') || 31457280;
   }
 
-  async create(createFileDto: CreateOcrDto): Promise<BloodTestDataValidation> {
+  async create(createFileDto: CreateOcrDto): Promise<BloodTestData> {
     const { data } = createFileDto;
 
     this.validateBase64Input(data);
@@ -138,8 +133,7 @@ export class OcrService {
 
       this.cleanupTemporaryFiles(filePath);
 
-      const validation = await this.bloodTestService.validateBloodTest(result);
-      return { ...result, validation };
+      return result;
     } catch (error) {
       this.cleanupTemporaryFiles(filePath);
 
@@ -203,7 +197,6 @@ export class OcrService {
 
       this.logger.log(`PDF has ${pageNum} page(s)`);
     } finally {
-      // Cleanup temporary image files
       tempImagePaths.forEach((imgPath) => {
         if (fs.existsSync(imgPath)) {
           fs.unlinkSync(imgPath);
@@ -258,7 +251,6 @@ export class OcrService {
       markers,
     );
 
-    // Cleanup temporary files
     if (fs.existsSync(cleaned)) {
       fs.unlinkSync(cleaned);
     }
@@ -429,7 +421,6 @@ export class OcrService {
       basePath.replace(/\.(png|jpg|jpeg|pdf)$/i, '_ocr_raw.txt'),
     ];
 
-    // For PDF files, also clean up page images
     if (basePath.endsWith('.pdf')) {
       const basePathWithoutExt = basePath.replace('.pdf', '');
       const dir = path.dirname(basePath);

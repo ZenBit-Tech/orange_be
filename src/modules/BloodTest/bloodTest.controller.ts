@@ -5,11 +5,11 @@ import type {
   BloodTestValidation,
 } from '@common/interfaces/blood-test-data.interface';
 
-@Controller('blood-test')
+@Controller('')
 export class BloodTestController {
   constructor(private bloodTestService: BloodTestService) {}
 
-  @Post('validate')
+  @Post('validate-blood-test')
   isValid(@Body() data: BloodTestData): Promise<BloodTestValidation> {
     return this.bloodTestService.validateBloodTest(data);
   }
