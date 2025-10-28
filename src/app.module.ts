@@ -11,7 +11,8 @@ import facebookOauthConfig from '@config/facebook-oauth.config';
 import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
 import linkedinAuth from '@config/linkedin-oauth.config';
-import { FilesModule } from './modules/files/files.module';
+import { OcrModule } from '@modules/ocr/ocr.module';
+import { BloodTestModule } from '@modules/BloodTest/bloodTest.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;
@@ -49,7 +50,8 @@ type AppConfig = {
 
     UserModule,
     AuthModule,
-    FilesModule,
+    OcrModule,
+    BloodTestModule,
   ],
   providers: [
     {

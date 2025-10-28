@@ -3,7 +3,8 @@ import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+/** @type {import('typescript-eslint').Config} */
+const config = tseslint.config(
   {
     ignores: ['eslint.config.mjs'],
   },
@@ -31,3 +32,5 @@ export default tseslint.config(
     },
   },
 );
+
+export default config;
