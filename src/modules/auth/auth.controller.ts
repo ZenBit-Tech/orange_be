@@ -11,6 +11,7 @@ import {
   UseGuards,
   Logger,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -36,6 +37,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private configService: ConfigService,
+    private jwtService: JwtService,
   ) {}
 
   @UseGuards(GoogleAuthGuard)
@@ -74,11 +76,19 @@ export class AuthController {
         req.user,
         'google',
       );
+
       const url = this.configService.get<string>('FRONTEND_URL');
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      res.cookie('jwt', response.accessToken, {
+      const accessToken =
+        response.accessToken ||
+        this.jwtService.sign({
+          email: req.user.email,
+          sub: req.user.id,
+        });
+
+      res.cookie('auth-token', accessToken, {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',
@@ -146,8 +156,9 @@ export class AuthController {
   async verifyToken(
     @Query('token') token: string,
     @Query('email') email: string,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<MagicLinkResponseDto> {
-    return this.authService.verifyToken(token, email);
+    return this.authService.verifyToken(token, email, response);
   }
   @UseGuards(LinkedInAuthGuard)
   @Get('linkedin/login')
@@ -192,7 +203,7 @@ export class AuthController {
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      res.cookie('jwt', response.accessToken, {
+      res.cookie('auth-token', response.accessToken, {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',
@@ -248,7 +259,7 @@ export class AuthController {
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      res.cookie('jwt', response.accessToken, {
+      res.cookie('auth-token', response.accessToken, {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',

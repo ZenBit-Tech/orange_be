@@ -23,7 +23,7 @@ export function cleanJsonString(str: string): string {
 @Injectable()
 export class BloodTestService {
   private readonly MAX_TOKENS = 4000;
-  private readonly MODEL = 'gpt-4-turbo-preview';
+  private readonly MODEL = 'gpt-4o-mini';
 
   constructor(private readonly openAI: OpenAI) {}
 
