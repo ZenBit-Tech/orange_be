@@ -10,16 +10,17 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
+import { Response } from 'express';
 import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
+import { COOKIE_MAX_AGE } from '@common/constants';
 import { UserService } from '@modules/user/user.service';
 import { CreateUserDto } from './dto/create-user-dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { MagicLink } from './entities/magic-link.entity';
 import { emailTemplate } from 'utils/emailTemplates/magicLink';
-
 @Injectable()
 export class AuthService {
   private transporter: nodemailer.Transporter;
@@ -109,7 +110,9 @@ export class AuthService {
     }
   }
 
-  async sendMagicLink(email: string): Promise<{ message: string }> {
+  async sendMagicLink(
+    email: string,
+  ): Promise<{ message: string; token: string }> {
     try {
       let user = await this.usersService.findByEmail(email);
 
@@ -138,7 +141,7 @@ export class AuthService {
         html: emailTemplate(magicLinkUrl),
       });
 
-      return { message: `Sign-in link sent to ${email}` };
+      return { message: `Sign-in link sent to ${email}`, token: token };
     } catch (error) {
       if (error instanceof Error) {
         throw new BadRequestException(`Failed to send email: ${error.message}`);
@@ -150,6 +153,7 @@ export class AuthService {
   async verifyToken(
     token: string,
     email: string,
+    response: Response,
   ): Promise<{ accessToken: string; email: string }> {
     try {
       const user = await this.usersService.findByEmail(email);
@@ -177,6 +181,13 @@ export class AuthService {
 
       const payload = { email: user.email, sub: user.id };
       const accessToken = this.jwtService.sign(payload);
+
+      response.cookie('auth-token', accessToken, {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        maxAge: COOKIE_MAX_AGE,
+      });
 
       return { accessToken, email };
     } catch (error) {
