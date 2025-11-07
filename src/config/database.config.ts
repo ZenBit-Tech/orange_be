@@ -10,7 +10,8 @@ export const databaseConfig = registerAs('database', () => ({
   password: process.env.DB_PASS || '',
   database: process.env.DB_NAME || 'ailab',
   autoLoadEntities: true,
-  synchronize: true,
+  synchronize: false,
+  ssl: false,
   entities: [User, MagicLink],
   migrations: [
     '@src/database/migrations/*.ts',
