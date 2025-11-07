@@ -6,9 +6,10 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "start:heroku": "node dist/main.js",
+    "heroku-postbuild": "npm run build",
+    "start:prod": "node dist/main",
     "build": "nest build",
-    "start": "node dist/main",
+    "start": "nest start",
     "prebuild": "rimraf dist",
     "start:debug": "nest start --debug --watch",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/typeorm.config.ts",

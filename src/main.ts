@@ -16,11 +16,6 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
-  app.enableCors({
-    origin: process.env.FRONTEND_URL,
-    methods: 'Get, Post, Put, Delete',
-    credentials: true,
-  });
   app.use(cookieParser());
 
   app.use(bodyParser.json({ limit: '30mb' }));
