@@ -7,8 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "heroku-postbuild": "npm run build",
-    "start:prod": "node dist/main",
     "build": "nest build",
+    "start:prod": "node dist/main",
     "start": "nest start",
     "prebuild": "rimraf dist",
     "start:debug": "nest start --debug --watch",
