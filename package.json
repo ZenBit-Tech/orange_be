@@ -6,11 +6,10 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "start:heroku": "npm run build && node dist/main",
+    "start:heroku": "node dist/main.js",
     "build": "nest build",
     "start": "node dist/main",
-    "start:prod": "node dist/main",
-    "heroku-postbuild": "npm run build",
+    "prebuild": "rimraf dist",
     "start:debug": "nest start --debug --watch",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/typeorm.config.ts",
     "migration:generate": "npm run typeorm -- migration:generate src/database/migrations/Init",
