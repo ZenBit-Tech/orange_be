@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "start:heroku": "npm run build && node dist/main",
     "build": "nest build",
     "start": "node dist/main",
     "start:prod": "node dist/main",
