@@ -26,6 +26,7 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { LinkedInAuthGuard } from './guards/linkedin-auth.guard';
 import { COOKIE_MAX_AGE } from '@common/constants';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
+import { AuthGuard } from './guards/auth.guard';
 
 interface RequestWithUser extends Request {
   user: OAuthUserDto;
@@ -39,6 +40,25 @@ export class AuthController {
     private configService: ConfigService,
     private jwtService: JwtService,
   ) {}
+
+  @UseGuards(AuthGuard)
+  @Get('me')
+  @ApiOperation({ summary: "Get the current user's profile" })
+  getProfile(@Req() req: RequestWithUser) {
+    return req.user;
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.cookie('auth-token', '', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax',
+      expires: new Date(0),
+    });
+    return { message: 'Logged out' };
+  }
 
   @UseGuards(GoogleAuthGuard)
   @Get('google/login')
@@ -96,7 +116,7 @@ export class AuthController {
       });
 
       this.logger.log('Google authentication successful, redirecting');
-      res.redirect(url);
+      res.redirect(`${url}/upload`);
     } catch (error) {
       this.logger.error('Google callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
@@ -211,7 +231,7 @@ export class AuthController {
       });
 
       this.logger.log('LinkedIn authentication successful, redirecting');
-      res.redirect(url);
+      res.redirect(`${url}/upload`);
     } catch (error) {
       this.logger.error('LinkedIn callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
@@ -267,7 +287,7 @@ export class AuthController {
       });
 
       this.logger.log('Facebook authentication successful, redirecting');
-      res.redirect(url);
+      res.redirect(`${url}/upload`);
     } catch (error) {
       this.logger.error('Facebook callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
