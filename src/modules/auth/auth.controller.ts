@@ -181,7 +181,7 @@ export class AuthController {
 
       const { accessToken } = await this.authService.findOrCreateUser(
         req.user,
-        'google',
+        'linkedin',
       );
 
       const url = this.configService.get<string>('FRONTEND_URL');
