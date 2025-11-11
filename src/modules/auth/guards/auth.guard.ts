@@ -9,18 +9,14 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 
 interface JwtPayload {
-  email: string;
   sub: string;
+  email: string;
   iat?: number;
   exp?: number;
 }
 
-interface RequestWithUser extends Request {
+export interface RequestWithUser extends Request {
   user?: JwtPayload;
-  cookies: {
-    'auth-token'?: string;
-    [key: string]: string | undefined;
-  };
 }
 
 @Injectable()
@@ -31,26 +27,26 @@ export class AuthGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<RequestWithUser>();
-    const token = this.extractToken(request);
+    const request = context.switchToHttp().getRequest<Request>();
+    const authHeader = request.headers.authorization;
 
-    if (!token) {
-      throw new UnauthorizedException('No authentication token found');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException(
+        'Missing or invalid Authorization header',
+      );
     }
+
+    const token = authHeader.split(' ')[1];
 
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
+
       request.user = payload;
+      return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
     }
-
-    return true;
-  }
-
-  private extractToken(request: RequestWithUser): string | undefined {
-    return request.cookies['auth-token'];
   }
 }
