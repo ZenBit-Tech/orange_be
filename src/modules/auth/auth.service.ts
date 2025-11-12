@@ -15,7 +15,6 @@ import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { OAuthUserDto } from '@database/dtos/oauth-user.dto';
 import { FacebookUserDto } from '@database/dtos/facebook-user.dto';
-import { COOKIE_MAX_AGE } from '@common/constants';
 import { UserService } from '@modules/user/user.service';
 import { CreateUserDto } from './dto/create-user-dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -153,7 +152,6 @@ export class AuthService {
   async verifyToken(
     token: string,
     email: string,
-    response: Response,
   ): Promise<{ accessToken: string; email: string }> {
     try {
       const user = await this.usersService.findByEmail(email);
@@ -181,13 +179,6 @@ export class AuthService {
 
       const payload = { email: user.email, sub: user.id };
       const accessToken = this.jwtService.sign(payload);
-
-      response.cookie('auth-token', accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: COOKIE_MAX_AGE,
-      });
 
       return { accessToken, email };
     } catch (error) {

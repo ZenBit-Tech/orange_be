@@ -24,7 +24,6 @@ import {
 } from './dto/auth-response.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { LinkedInAuthGuard } from './guards/linkedin-auth.guard';
-import { COOKIE_MAX_AGE } from '@common/constants';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
 
 interface RequestWithUser extends Request {
@@ -72,7 +71,7 @@ export class AuthController {
 
       this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-      const response = await this.authService.findOrCreateUser(
+      const { accessToken } = await this.authService.findOrCreateUser(
         req.user,
         'google',
       );
@@ -81,22 +80,8 @@ export class AuthController {
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      const accessToken =
-        response.accessToken ||
-        this.jwtService.sign({
-          email: req.user.email,
-          sub: req.user.id,
-        });
-
-      res.cookie('auth-token', accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: COOKIE_MAX_AGE,
-      });
-
+      res.redirect(`${url}/auth-verify?token=${accessToken}`);
       this.logger.log('Google authentication successful, redirecting');
-      res.redirect(url);
     } catch (error) {
       this.logger.error('Google callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
@@ -156,9 +141,8 @@ export class AuthController {
   async verifyToken(
     @Query('token') token: string,
     @Query('email') email: string,
-    @Res({ passthrough: true }) response: Response,
   ): Promise<MagicLinkResponseDto> {
-    return this.authService.verifyToken(token, email, response);
+    return this.authService.verifyToken(token, email);
   }
   @UseGuards(LinkedInAuthGuard)
   @Get('linkedin/login')
@@ -195,23 +179,18 @@ export class AuthController {
 
       this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-      const response = await this.authService.findOrCreateUser(
+      const { accessToken } = await this.authService.findOrCreateUser(
         req.user,
         'linkedin',
       );
+
       const url = this.configService.get<string>('FRONTEND_URL');
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      res.cookie('auth-token', response.accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: COOKIE_MAX_AGE,
-      });
+      res.redirect(`${url}/auth-verify?token=${accessToken}`);
 
       this.logger.log('LinkedIn authentication successful, redirecting');
-      res.redirect(url);
     } catch (error) {
       this.logger.error('LinkedIn callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
@@ -254,20 +233,16 @@ export class AuthController {
 
       this.logger.log(`User authenticated: ${JSON.stringify(req.user)}`);
 
-      const response = await this.authService.validateOAuthFacebook(req.user);
+      const { accessToken } = await this.authService.validateOAuthFacebook(
+        req.user,
+      );
       const url = this.configService.get<string>('FRONTEND_URL');
 
       if (!url) throw new Error('FRONTEND_URL is not defined');
 
-      res.cookie('auth-token', response.accessToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: COOKIE_MAX_AGE,
-      });
+      res.redirect(`${url}/auth-verify?token=${accessToken}`);
 
       this.logger.log('Facebook authentication successful, redirecting');
-      res.redirect(url);
     } catch (error) {
       this.logger.error('Facebook callback error:', error);
       const url = this.configService.get<string>('FRONTEND_URL');
