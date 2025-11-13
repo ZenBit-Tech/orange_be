@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MarkerModule } from '@modules/marker/marker.module';
 import { OcrController } from './ocr.controller';
 import { OcrService } from './orc.service';
-import { BloodTestModule } from '@modules/BloodTest/bloodTest.module';
+import { BloodTestModule } from '@modules/bloodTest/bloodTest.module';
 
 @Module({
   imports: [ConfigModule, MarkerModule, BloodTestModule],
