@@ -1,7 +1,10 @@
 import sharp from 'sharp';
 import { createWorker, PSM, RecognizeResult } from 'tesseract.js';
 import fs from 'fs';
-import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
+import {
+  BloodTestData,
+  MarkerValue,
+} from '@common/interfaces/blood-test-data.interface';
 import { Marker } from '@modules/marker/entities/marker.entity';
 
 export async function extractBloodTestData(
@@ -41,15 +44,7 @@ function parseBloodTestWithMarkers(
   text: string,
   markers: Marker[],
 ): BloodTestData {
-  const data: BloodTestData = {
-    patientInfo: {},
-    lipids: {},
-    bloodAll: {},
-    kidneyFunction: {},
-    liverFunction: {},
-  };
-
-  console.log(`Processing ${markers.length} markers`);
+  const data: BloodTestData = {};
 
   for (const marker of markers) {
     try {
@@ -57,29 +52,15 @@ function parseBloodTestWithMarkers(
       const match = text.match(pattern);
 
       if (match && match[1]) {
-        const value = match[1];
-        const numValue = normalizeNumber(value, marker.key);
+        const rawValue = match[1];
+        const numValue = normalizeNumber(rawValue, marker.key);
 
-        console.log(`✓ Found ${marker.key}: ${numValue}`);
-
-        switch (marker.category) {
-          case 'patientInfo':
-            data.patientInfo[marker.key] =
-              marker.key === 'age' ? numValue : value;
-            break;
-          case 'lipids':
-            data.lipids[marker.key] = numValue;
-            break;
-          case 'bloodAll':
-            data.bloodAll[marker.key] = numValue;
-            break;
-          case 'liverFunction':
-            data.liverFunction[marker.key] = numValue;
-            break;
-          case 'kidneyFunction':
-            data.kidneyFunction[marker.key] = numValue;
-            break;
-        }
+        data[marker.key as keyof BloodTestData] = {
+          value: numValue,
+          unit: marker.unit,
+          referenceMin: marker.referenceMin,
+          referenceMax: marker.referenceMax,
+        } as MarkerValue;
       }
     } catch (error) {
       const errorMessage =

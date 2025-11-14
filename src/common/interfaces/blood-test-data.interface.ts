@@ -1,60 +1,54 @@
+export interface MarkerValue {
+  value: number;
+  unit: string;
+  referenceMin: number;
+  referenceMax: number;
+}
+
 export interface BloodTestData {
-  patientInfo: PatientInfo;
-  lipids: LipidProfile;
-  bloodAll: BloodCount;
-  liverFunction: LiverFunction;
-  kidneyFunction: KidneyFunction;
+  wbc?: MarkerValue;
+  rbc?: MarkerValue;
+  hemoglobin?: MarkerValue;
+  hematocrit?: MarkerValue;
+  mcv?: MarkerValue;
+  mch?: MarkerValue;
+  mchc?: MarkerValue;
+  plt?: MarkerValue;
+  rdwsd?: MarkerValue;
+  rdwcv?: MarkerValue;
+  pdw?: MarkerValue;
+  mpv?: MarkerValue;
+  neutrophils?: MarkerValue;
+  lymphocytes?: MarkerValue;
+  monocytes?: MarkerValue;
+  eosinophils?: MarkerValue;
+  basophils?: MarkerValue;
+  triglycerides?: MarkerValue;
+  cholesterol?: MarkerValue;
+  hdl?: MarkerValue;
+  ldl?: MarkerValue;
+  vldl?: MarkerValue;
+  atherogenicCoeff?: MarkerValue;
+  totalBilirubin?: MarkerValue;
+  directBilirubin?: MarkerValue;
+  alt?: MarkerValue;
+  ast?: MarkerValue;
+  ggt?: MarkerValue;
+  alp?: MarkerValue;
+  glucose?: MarkerValue;
+  albumin?: MarkerValue;
+  creatinine?: MarkerValue;
+  uricAcid?: MarkerValue;
 }
 
-export interface PatientInfo {
-  age?: number;
-  sex?: string;
-  dob?: string;
-}
-
-export interface LipidProfile {
-  triglycerides?: number;
-  cholesterol?: number;
-  hdl?: number;
-  ldl?: number;
-  vldl?: number;
-  atherogenicCoeff?: number;
-}
-
-export interface BloodCount {
-  wbc?: number;
-  rbc?: number;
-  hemoglobin?: number;
-  hematocrit?: number;
-  mcv?: number;
-  mch?: number;
-  mchc?: number;
-  plt?: number;
-  rdwsd?: number;
-  rdwcv?: number;
-  pdw?: number;
-  mpv?: number;
-  neutrophils?: number;
-  lymphocytes?: number;
-  monocytes?: number;
-  eosinophils?: number;
-  basophils?: number;
-}
-
-export interface LiverFunction {
-  totalBilirubin?: number;
-  directBilirubin?: number;
-  alt?: number;
-  ast?: number;
-  ggt?: number;
-  alp?: number;
-  glucose?: number;
-  albumin?: number;
-}
-
-export interface KidneyFunction {
-  creatinine?: number;
-  uricAcid?: number;
+export interface Marker {
+  id: number;
+  key: string;
+  pattern: string;
+  language: string;
+  category: string;
+  unit: string;
+  normalRange: string;
 }
 
 export interface BloodTestValidation {

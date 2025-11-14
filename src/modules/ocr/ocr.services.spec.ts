@@ -1,14 +1,15 @@
+/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
-import { OcrService } from './orc.service';
+import { OcrService } from './ocr.service';
 
 jest.mock('@modules/ocr', () => ({
   extractBloodTestData: jest.fn(),
 }));
 
-import { extractBloodTestData } from '@modules/ocr/extract-blood-test';
+import { extractBloodTestData } from './extractBloodTestData';
 
 describe('OcrService', () => {
   let service: OcrService;
