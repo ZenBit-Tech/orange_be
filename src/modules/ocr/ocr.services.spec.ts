@@ -126,37 +126,37 @@ describe('OcrService', () => {
   describe('validateAndDetectFileType', () => {
     it('should detect PNG file type', () => {
       const data = 'data:image/png;base64,abc123';
-      const fileType = (service as any).validateAndDetectFileType(data);
+      const fileType = service['validateAndDetectFileType'](data);
       expect(fileType).toBe('png');
     });
 
     it('should detect JPG file type', () => {
       const data = 'data:image/jpg;base64,abc123';
-      const fileType = (service as any).validateAndDetectFileType(data);
+      const fileType = service['validateAndDetectFileType'](data);
       expect(fileType).toBe('jpg');
     });
 
     it('should detect JPEG file type', () => {
       const data = 'data:image/jpeg;base64,abc123';
-      const fileType = (service as any).validateAndDetectFileType(data);
+      const fileType = service['validateAndDetectFileType'](data);
       expect(fileType).toBe('jpeg');
     });
 
     it('should detect PDF file type', () => {
       const data = 'data:application/pdf;base64,abc123';
-      const fileType = (service as any).validateAndDetectFileType(data);
+      const fileType = service['validateAndDetectFileType'](data);
       expect(fileType).toBe('pdf');
     });
 
     it('should throw error for unsupported file type', () => {
       const data = 'data:text/plain;base64,abc123';
-      expect(() => (service as any).validateAndDetectFileType(data)).toThrow(
+      expect(() => service['validateAndDetectFileType'](data)).toThrow(
         BadRequestException,
       );
     });
 
     it('should throw error for empty data', () => {
-      expect(() => (service as any).validateAndDetectFileType('')).toThrow(
+      expect(() => service['validateAndDetectFileType']('')).toThrow(
         BadRequestException,
       );
     });
@@ -166,69 +166,69 @@ describe('OcrService', () => {
     it('should detect English language', () => {
       const text =
         'Cholesterol: 5.2 mmol/L\nGlucose: 4.5 mmol/L\nHemoglobin: 145 g/L';
-      const language = (service as any).detectLanguageFromText(text);
+      const language = service['detectLanguageFromText'](text);
       expect(language).toBe('en');
     });
 
     it('should detect Ukrainian language', () => {
       const text =
         'Холестерин: 5.2 ммоль/л\nГлюкоза: 4.5 ммоль/л\nГемоглобін: 145 г/л';
-      const language = (service as any).detectLanguageFromText(text);
+      const language = service['detectLanguageFromText'](text);
       expect(language).toBe('uk');
     });
 
     it('should detect Polish language', () => {
       const text =
         'Cholesterol: 5.2 mmol/l\nGlukoza: 4.5 mmol/l\nHemoglobina: 145 g/l';
-      const language = (service as any).detectLanguageFromText(text);
+      const language = service['detectLanguageFromText'](text);
       expect(language).toBe('pl');
     });
 
     it('should default to English for unknown text', () => {
       const text = '12345 67890 abcdef';
-      const language = (service as any).detectLanguageFromText(text);
+      const language = service['detectLanguageFromText'](text);
       expect(language).toBe('en');
     });
   });
 
   describe('normalizeNumber', () => {
     it('should parse decimal number with dot', () => {
-      const result = (service as any).normalizeNumber('5.2', 'glucose');
+      const result = service['normalizeNumber']('5.2', 'glucose');
       expect(result).toBe(5.2);
     });
 
     it('should parse decimal number with comma', () => {
-      const result = (service as any).normalizeNumber('5,2', 'glucose');
+      const result = service['normalizeNumber']('5,2', 'glucose');
       expect(result).toBe(5.2);
     });
 
     it('should remove spaces from number', () => {
-      const result = (service as any).normalizeNumber('5 . 2', 'glucose');
+      const result = service['normalizeNumber']('5 . 2', 'glucose');
       expect(result).toBe(5.2);
     });
 
     it('should convert lipid values (divide by 100 if >= 10)', () => {
-      const result = (service as any).normalizeNumber('520', 'cholesterol');
+      const result = service['normalizeNumber']('520', 'cholesterol');
       expect(result).toBe(5.2);
     });
 
     it('should not convert small lipid values', () => {
-      const result = (service as any).normalizeNumber('5', 'cholesterol');
+      const result = service['normalizeNumber']('5', 'cholesterol');
       expect(result).toBe(5);
     });
 
     it('should convert glucose values (divide by 100 if >= 100)', () => {
-      const result = (service as any).normalizeNumber('450', 'glucose');
+      const result = service['normalizeNumber']('450', 'glucose');
       expect(result).toBe(4.5);
     });
 
     it('should not convert small glucose values', () => {
-      const result = (service as any).normalizeNumber('50', 'glucose');
+      const result = service['normalizeNumber']('50', 'glucose');
       expect(result).toBe(50);
     });
 
     it('should handle hemoglobin values without conversion', () => {
-      const result = (service as any).normalizeNumber('145', 'hemoglobin');
+      const result = service['normalizeNumber']('145', 'hemoglobin');
       expect(result).toBe(145);
     });
   });
@@ -236,10 +236,7 @@ describe('OcrService', () => {
   describe('parseBloodTestWithMarkers', () => {
     it('should extract markers from text', () => {
       const text = 'Hemoglobin: 145 g/L\nGlucose: 5.2 mmol/L';
-      const result = (service as any).parseBloodTestWithMarkers(
-        text,
-        mockMarkers,
-      );
+      const result = service['parseBloodTestWithMarkers'](text, mockMarkers);
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
@@ -262,10 +259,7 @@ describe('OcrService', () => {
 
     it('should return empty array when no markers match', () => {
       const text = 'Random text without markers';
-      const result = (service as any).parseBloodTestWithMarkers(
-        text,
-        mockMarkers,
-      );
+      const result = service['parseBloodTestWithMarkers'](text, mockMarkers);
       expect(result).toHaveLength(0);
     });
 
@@ -276,9 +270,7 @@ describe('OcrService', () => {
       };
       const text = 'Hemoglobin: 145 g/L';
 
-      const result = (service as any).parseBloodTestWithMarkers(text, [
-        badMarker,
-      ]);
+      const result = service['parseBloodTestWithMarkers'](text, [badMarker]);
       expect(result).toHaveLength(0);
     });
   });
@@ -291,8 +283,8 @@ describe('OcrService', () => {
           name: 'Hemoglobin',
           value: 145,
           unit: 'g/L',
-          referenceMin: '130',
-          referenceMax: '160',
+          referenceMin: 130,
+          referenceMax: 160,
         },
       ];
       const data2 = [
@@ -301,12 +293,12 @@ describe('OcrService', () => {
           name: 'Glucose',
           value: 5.2,
           unit: 'mmol/L',
-          referenceMin: '4.11',
-          referenceMax: '5.89',
+          referenceMin: 4.11,
+          referenceMax: 5.89,
         },
       ];
 
-      const result = (service as any).mergeBloodTestData([data1, data2]);
+      const result = service['mergeBloodTestData']([data1, data2]);
       expect(result).toHaveLength(2);
     });
 
@@ -317,8 +309,8 @@ describe('OcrService', () => {
           name: 'Hemoglobin',
           value: 145,
           unit: 'g/L',
-          referenceMin: '130',
-          referenceMax: '160',
+          referenceMin: 130,
+          referenceMax: 160,
         },
       ];
       const data2 = [
@@ -327,18 +319,18 @@ describe('OcrService', () => {
           name: 'Hemoglobin',
           value: 150,
           unit: 'g/L',
-          referenceMin: '130',
-          referenceMax: '160',
+          referenceMin: 130,
+          referenceMax: 160,
         },
       ];
 
-      const result = (service as any).mergeBloodTestData([data1, data2]);
+      const result = service['mergeBloodTestData']([data1, data2]);
       expect(result).toHaveLength(1);
       expect(result[0].value).toBe(150);
     });
 
     it('should handle empty arrays', () => {
-      const result = (service as any).mergeBloodTestData([]);
+      const result = service['mergeBloodTestData']([]);
       expect(result).toHaveLength(0);
     });
   });
@@ -346,32 +338,28 @@ describe('OcrService', () => {
   describe('validateBase64Input', () => {
     it('should not throw for valid base64 image', () => {
       const validData = 'data:image/png;base64,iVBORw0KGgo=';
-      expect(() =>
-        (service as any).validateBase64Input(validData),
-      ).not.toThrow();
+      expect(() => service['validateBase64Input'](validData)).not.toThrow();
     });
 
     it('should not throw for valid base64 PDF', () => {
       const validData = 'data:application/pdf;base64,JVBERi0=';
-      expect(() =>
-        (service as any).validateBase64Input(validData),
-      ).not.toThrow();
+      expect(() => service['validateBase64Input'](validData)).not.toThrow();
     });
 
     it('should throw for empty string', () => {
-      expect(() => (service as any).validateBase64Input('')).toThrow(
+      expect(() => service['validateBase64Input']('')).toThrow(
         BadRequestException,
       );
     });
 
     it('should throw for whitespace only', () => {
-      expect(() => (service as any).validateBase64Input('   ')).toThrow(
+      expect(() => service['validateBase64Input']('   ')).toThrow(
         BadRequestException,
       );
     });
 
     it('should throw for invalid format', () => {
-      expect(() => (service as any).validateBase64Input('not-base64')).toThrow(
+      expect(() => service['validateBase64Input']('not-base64')).toThrow(
         BadRequestException,
       );
     });
