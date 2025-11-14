@@ -266,19 +266,15 @@ export class OcrService {
   }
 
   private mergeBloodTestData(dataArray: BloodTestData[]): BloodTestData {
-    const merged: BloodTestData = {};
+    const mergedMap = new Map<string, MarkerValue>();
 
     for (const data of dataArray) {
-      Object.keys(data).forEach((key) => {
-        const value = data[key as keyof BloodTestData];
-
-        if (value !== undefined) {
-          (merged as string)[key] = value;
-        }
-      });
+      for (const marker of data) {
+        mergedMap.set(marker.id, marker);
+      }
     }
 
-    return merged;
+    return Array.from(mergedMap.values());
   }
 
   private detectLanguageFromText(text: string): string {
@@ -315,7 +311,7 @@ export class OcrService {
     text: string,
     markers: Marker[],
   ): BloodTestData {
-    const data: BloodTestData = {};
+    const data: BloodTestData = [];
 
     for (const marker of markers) {
       try {
@@ -326,12 +322,14 @@ export class OcrService {
           const rawValue = match[1];
           const numValue = this.normalizeNumber(rawValue, marker.key);
 
-          data[marker.key as keyof BloodTestData] = {
+          data.push({
+            id: marker.key,
+            name: marker.name,
             value: numValue,
             unit: marker.unit,
             referenceMin: marker.referenceMin,
             referenceMax: marker.referenceMax,
-          } as MarkerValue;
+          });
         }
       } catch (error) {
         const errorMessage =

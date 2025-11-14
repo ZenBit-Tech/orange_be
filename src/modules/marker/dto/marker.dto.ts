@@ -11,6 +11,11 @@ export class CreateMarkerDto {
   @ApiProperty({ example: 'cholesterol' })
   @IsNotEmpty()
   @IsString()
+  name: string;
+
+  @ApiProperty({ example: 'cholesterol' })
+  @IsNotEmpty()
+  @IsString()
   key: string;
 
   @ApiProperty({ example: 'en' })

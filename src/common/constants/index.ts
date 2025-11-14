@@ -1222,29 +1222,44 @@ export const markers = [
   },
 ];
 
-export const getValidationPrompt = (values: BloodTestData): string => `
-You are a medical data validation assistant.
+export function getValidationPrompt(values: BloodTestData): string {
+  return `You are a medical data validation assistant.
 
-Your task: Determine if the provided object represents actual blood test results.
+Your task: Determine if the provided array represents actual blood test results extracted via OCR.
 
-Criteria for a valid blood test:
+IMPORTANT CONTEXT:
+- This data was extracted from a scanned blood test document using OCR
+- Some values MAY be outside normal ranges (that's medically possible and expected)
+- Some values MAY have OCR extraction errors (e.g., misread digits)
+- Field names use technical IDs (e.g., "hemoglobin", "glucose", "ldl")
+- Reference ranges are included for each marker
+
+Criteria for a VALID blood test:
 1. Contains at least 3 medical parameters with numeric values
-2. Values are within realistic physiological ranges (not random numbers)
-3. Has proper medical terminology (e.g., glucose, hemoglobin, cholesterol)
-4. May contain a "question" or "userQuestion" field (ignore it for validation)
+2. Has proper medical terminology (hemoglobin, glucose, cholesterol, creatinine, etc.)
+3. Includes units typical for lab tests (g/L, mmol/L, %, etc.)
+4. Has reference ranges (referenceMin/referenceMax)
+5. Values are numeric (even if some seem unusual due to OCR errors)
 
-Invalid examples:
-- Random numeric data without medical context
-- Only 1-2 values
-- Completely unrealistic values (e.g., glucose = 1000)
+Criteria for INVALID (reject):
+- Random data with no medical context
+- Only 1-2 parameters
+- No recognizable medical marker names
+- Missing units entirely
+- Values are clearly text/gibberish, not numbers
+
+NOTE: Do NOT reject based on:
+- Values being outside normal ranges (patients can have abnormal results)
+- Potential OCR errors in numbers (e.g., "235" instead of "2.35")
+- Technical naming conventions (snake_case IDs are acceptable)
 
 Data to validate:
 ${JSON.stringify(values, null, 2)}
 
-Respond ONLY with valid JSON (no markdown):
+Analyze this data and respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "isBloodTest": boolean,
-  "reason": "brief explanation",
+  "reason": "brief explanation focusing on structure and medical terminology, not value ranges",
   "confidence": "low" | "medium" | "high"
+}`;
 }
-`;
