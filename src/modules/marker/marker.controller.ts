@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { MarkerService } from './marker.service';
 import { CreateMarkerDto, UpdateMarkerDto } from './dto/marker.dto';
 import { Marker } from './entities/marker.entity';
+import { CreateReviewDataDto } from './dto/review-data.dto';
 
 @ApiTags('Markers')
 @Controller('markers')
@@ -82,5 +83,12 @@ export class MarkerController {
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<void> {
     return this.markerService.remove(id);
+  }
+
+  @Post('receive-data')
+  @ApiOperation({ summary: 'Receive data from review & customize step' })
+  @ApiResponse({ status: 200, description: 'Data from frontend received' })
+  receiveData(@Body() body: CreateReviewDataDto): CreateReviewDataDto {
+    return this.markerService.receiveData(body);
   }
 }

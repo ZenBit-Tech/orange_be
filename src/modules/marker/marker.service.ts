@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Marker } from './entities/marker.entity';
 import { CreateMarkerDto, UpdateMarkerDto } from './dto/marker.dto';
+import { CreateReviewDataDto } from './dto/review-data.dto';
 
 @Injectable()
 export class MarkerService {
@@ -112,5 +113,9 @@ export class MarkerService {
       acc[row.language] = parseInt(row.count, 10);
       return acc;
     }, {});
+  }
+
+  receiveData(body: CreateReviewDataDto): CreateReviewDataDto {
+    return body;
   }
 }
