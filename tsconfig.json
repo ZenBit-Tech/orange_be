@@ -10,12 +10,13 @@
     "target": "ES2021",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "paths": {
-      "@modules/*": ["modules/*"],
-      "@config/*": ["config/*"],
-      "@database/*": ["database/*"],
-      "@common/*": ["common/*"]
+      "@modules/*": ["src/modules/*"],
+      "@config/*": ["src/config/*"],
+      "@database/*": ["src/database/*"],
+      "@common/*": ["src/common/*"],
+      "utils/*": ["src/utils/*"]
     },
     "incremental": true,
     "skipLibCheck": true,
@@ -27,6 +28,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
+  "include": ["src/**/*", ".eslintrc.js"],
+  "exclude": ["node_modules", "dist", "test"]
 }

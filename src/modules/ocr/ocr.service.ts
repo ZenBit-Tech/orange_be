@@ -10,11 +10,15 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
+import {
+  BloodTestData,
+  MarkerValue,
+} from '@common/interfaces/blood-test-data.interface';
 import { BASE64_PATTERN } from '@common/constants';
 import { MarkerService } from '@modules/marker/marker.service';
 import { Marker } from '@modules/marker/entities/marker.entity';
 import { CreateOcrDto } from './dto/create.dto';
+
 interface LanguageKeywords {
   [key: string]: string[];
 }
@@ -161,7 +165,7 @@ export class OcrService {
 
     if (imagePattern.test(data)) {
       const match = data.match(imagePattern);
-      return match![1].toLowerCase() as FileType;
+      return match[1].toLowerCase() as FileType;
     }
 
     if (pdfPattern.test(data)) {
@@ -262,26 +266,15 @@ export class OcrService {
   }
 
   private mergeBloodTestData(dataArray: BloodTestData[]): BloodTestData {
-    const merged: BloodTestData = {
-      patientInfo: {},
-      lipids: {},
-      bloodAll: {},
-      kidneyFunction: {},
-      liverFunction: {},
-    };
+    const mergedMap = new Map<string, MarkerValue>();
 
     for (const data of dataArray) {
-      merged.patientInfo = { ...merged.patientInfo, ...data.patientInfo };
-      merged.lipids = { ...merged.lipids, ...data.lipids };
-      merged.bloodAll = { ...merged.bloodAll, ...data.bloodAll };
-      merged.kidneyFunction = {
-        ...merged.kidneyFunction,
-        ...data.kidneyFunction,
-      };
-      merged.liverFunction = { ...merged.liverFunction, ...data.liverFunction };
+      for (const marker of data) {
+        mergedMap.set(marker.id, marker);
+      }
     }
 
-    return merged;
+    return Array.from(mergedMap.values());
   }
 
   private detectLanguageFromText(text: string): string {
@@ -318,13 +311,7 @@ export class OcrService {
     text: string,
     markers: Marker[],
   ): BloodTestData {
-    const data: BloodTestData = {
-      patientInfo: {},
-      lipids: {},
-      bloodAll: {},
-      kidneyFunction: {},
-      liverFunction: {},
-    };
+    const data: BloodTestData = [];
 
     for (const marker of markers) {
       try {
@@ -332,35 +319,22 @@ export class OcrService {
         const match = text.match(pattern);
 
         if (match && match[1]) {
-          const value = match[1];
-          const numValue = this.normalizeNumber(value, marker.key);
+          const rawValue = match[1];
+          const numValue = this.normalizeNumber(rawValue, marker.key);
 
-          switch (marker.category) {
-            case 'patientInfo':
-              data.patientInfo[marker.key] =
-                marker.key === 'age' ? numValue : value;
-              break;
-            case 'lipids':
-              data.lipids[marker.key] = numValue;
-              break;
-            case 'bloodAll':
-              data.bloodAll[marker.key] = numValue;
-              break;
-            case 'liverFunction':
-              data.liverFunction[marker.key] = numValue;
-              break;
-            case 'kidneyFunction':
-              data.kidneyFunction[marker.key] = numValue;
-              break;
-          }
+          data.push({
+            id: marker.key,
+            name: marker.name,
+            value: numValue,
+            unit: marker.unit,
+            referenceMin: marker.referenceMin,
+            referenceMax: marker.referenceMax,
+          });
         }
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
-        this.logger.error(
-          `Error processing marker ${marker.key}:`,
-          errorMessage,
-        );
+        console.error(`Error processing marker ${marker.key}:`, errorMessage);
       }
     }
 

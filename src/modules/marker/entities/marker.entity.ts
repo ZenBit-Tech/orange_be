@@ -13,6 +13,9 @@ export class Marker {
   id: string;
 
   @Column({ type: 'varchar', length: 100 })
+  name: string;
+
+  @Column({ type: 'varchar', length: 100 })
   @Index()
   key: string;
 
