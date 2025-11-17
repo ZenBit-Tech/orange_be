@@ -1308,7 +1308,7 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
 
   return `You are providing EDUCATIONAL INFORMATION ONLY, not medical advice.
 
-🚨 MANDATORY REQUIREMENT - READ CAREFULLY:
+  MANDATORY REQUIREMENT - READ CAREFULLY:
 EVERY SINGLE recommendation MUST include phrases like:
 - "Discuss with your doctor about..."
 - "Consult your healthcare provider before..."
@@ -1380,8 +1380,7 @@ ${markersExampleStructure}
   ${recommendationsSection},
   ${userQuestionSection}
 }
-
-🚨 FINAL REMINDER: 
+FINAL REMINDER: 
 If your response contains ANY phrase like "Take X daily", "Start doing Y", "Do Z exercise" WITHOUT "discuss with doctor" or "consult healthcare provider" - YOU HAVE FAILED THE TASK.
 
 Return ONLY the JSON object.`;
