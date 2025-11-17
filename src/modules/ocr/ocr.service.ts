@@ -239,20 +239,38 @@ export class OcrService {
     this.logger.log('OCR complete');
 
     const detectedLanguage = this.detectLanguageFromText(result.data.text);
+    this.logger.log(`Detected language: ${detectedLanguage}`);
 
-    const markers = await this.markerService.findByLanguage(detectedLanguage);
+    const localizedMarkers =
+      await this.markerService.findByLanguage(detectedLanguage);
 
-    if (markers.length === 0) {
+    if (localizedMarkers.length === 0) {
       throw new InternalServerErrorException(
         `No markers found for language: ${detectedLanguage}`,
       );
     }
 
-    this.logger.log(`Found ${markers.length} markers for ${detectedLanguage}`);
+    this.logger.log(
+      `Found ${localizedMarkers.length} markers for ${detectedLanguage}`,
+    );
+
+    const englishMarkers = await this.markerService.findByLanguage('en');
+
+    if (englishMarkers.length === 0) {
+      throw new InternalServerErrorException(
+        'No English markers found in database',
+      );
+    }
+
+    const englishMarkerMap = new Map<string, Marker>();
+    englishMarkers.forEach((marker) => {
+      englishMarkerMap.set(marker.key, marker);
+    });
 
     const bloodTestData = this.parseBloodTestWithMarkers(
       result.data.text,
-      markers,
+      localizedMarkers,
+      englishMarkerMap,
     );
 
     if (fs.existsSync(cleaned)) {
@@ -304,37 +322,55 @@ export class OcrService {
       }
     }
 
+    this.logger.log(`Language detection scores: ${JSON.stringify(scores)}`);
     return detectedLanguage;
   }
 
   private parseBloodTestWithMarkers(
     text: string,
-    markers: Marker[],
+    localizedMarkers: Marker[],
+    englishMarkerMap: Map<string, Marker>,
   ): BloodTestData {
     const data: BloodTestData = [];
 
-    for (const marker of markers) {
+    for (const localizedMarker of localizedMarkers) {
       try {
-        const pattern = new RegExp(marker.pattern, 'i');
+        const pattern = new RegExp(localizedMarker.pattern, 'i');
         const match = text.match(pattern);
 
         if (match && match[1]) {
           const rawValue = match[1];
-          const numValue = this.normalizeNumber(rawValue, marker.key);
+          const numValue = this.normalizeNumber(rawValue, localizedMarker.key);
+
+          const englishMarker = englishMarkerMap.get(localizedMarker.key);
+
+          if (!englishMarker) {
+            this.logger.warn(
+              `No English marker found for key: ${localizedMarker.key}`,
+            );
+            continue;
+          }
 
           data.push({
-            id: marker.key,
-            name: marker.name,
+            id: englishMarker.key,
+            name: englishMarker.name,
             value: numValue,
-            unit: marker.unit,
-            referenceMin: marker.referenceMin,
-            referenceMax: marker.referenceMax,
+            unit: englishMarker.unit,
+            referenceMin: englishMarker.referenceMin,
+            referenceMax: englishMarker.referenceMax,
           });
+
+          this.logger.log(
+            `Matched ${localizedMarker.name} -> ${englishMarker.name}: ${numValue} ${englishMarker.unit}`,
+          );
         }
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error';
-        console.error(`Error processing marker ${marker.key}:`, errorMessage);
+        this.logger.error(
+          `Error processing marker ${localizedMarker.key}:`,
+          errorMessage,
+        );
       }
     }
 
@@ -355,7 +391,7 @@ export class OcrService {
         'hdl',
         'ldl',
         'vldl',
-        'atherogenicCoeff',
+        'atherogenic_coefficient',
       ],
       biochemSmall: ['glucose', 'totalBilirubin', 'directBilirubin'],
     };
