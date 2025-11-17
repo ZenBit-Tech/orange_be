@@ -9,7 +9,7 @@
     "heroku-postbuild": "npm run build",
     "build": "nest build",
     "start:prod": "node dist/main",
-    "start": "nest start",
+    "start": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d src/config/typeorm.config.ts",
     "migration:generate": "npm run typeorm -- migration:generate src/database/migrations/Init",
