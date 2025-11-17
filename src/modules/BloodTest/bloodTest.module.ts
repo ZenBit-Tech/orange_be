@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import { BloodTestService } from './bloodTest.service';
 import { BloodTestController } from './bloodTest.controller';
+import { BloodTestService } from './bloodTest.service';
 
 @Module({
   imports: [ConfigModule],
