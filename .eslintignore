@@ -4,7 +4,6 @@ build/
 coverage/
 *.js
 !.eslintrc.js
-.eslintrc.js
 jest.config.js
 tsconfig.json
 tsconfig.eslint.json
