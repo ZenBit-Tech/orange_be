@@ -1,10 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BloodTestService } from './bloodTest.service';
-
 import OpenAI from 'openai';
+import { ChatCompletion } from 'openai/resources';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.inteface';
-import { ChatCompletion } from 'openai/resources/index';
+import { BloodTestService } from './bloodTest.service';
 
 jest.mock('openai');
 
