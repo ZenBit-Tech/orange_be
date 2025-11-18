@@ -35,9 +35,11 @@ export class BloodTestService {
 
   constructor(private readonly openAI: OpenAI) {}
 
-  async analyzeBloodTest(data: CreateReviewDataDto): Promise<AiAnalysisResult> {
+  async analyzeBloodTest(
+    testResults: CreateReviewDataDto,
+  ): Promise<AiAnalysisResult> {
     try {
-      const prompt = getBloodTestAnalysisPrompt(data);
+      const prompt = getBloodTestAnalysisPrompt(testResults);
       const completion = await this.openAI.chat.completions.create({
         model: this.MODEL,
         messages: [{ role: 'user', content: prompt }],

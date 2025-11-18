@@ -14,7 +14,9 @@ import { Marker } from '@modules/marker/entities/marker.entity';
 jest.mock('fs');
 jest.mock('sharp');
 jest.mock('tesseract.js');
-jest.mock('pdf-to-img');
+jest.mock('pdf-to-img', () => ({
+  pdf: jest.fn(),
+}));
 
 describe('OcrService', () => {
   let service: OcrService;
