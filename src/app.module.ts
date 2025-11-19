@@ -6,6 +6,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '@modules/auth/auth.module';
 import { UserModule } from '@modules/user/user.module';
+import { BloodTestModule } from '@modules/BloodTest/bloodTest.module';
 import { databaseConfig } from '@config/database.config';
 import googleOauthConfig from '@config/google-oauth.config';
 import facebookOauthConfig from '@config/facebook-oauth.config';
@@ -13,7 +14,6 @@ import jwtConfig from '@config/jwt.config';
 import { validate } from '@common/validation/env.validation';
 import linkedinAuth from '@config/linkedin-oauth.config';
 import { OcrModule } from '@modules/ocr/ocr.module';
-import { BloodTestModule } from '@modules/BloodTest/bloodTest.module';
 
 type AppConfig = {
   database: ConfigType<typeof databaseConfig>;

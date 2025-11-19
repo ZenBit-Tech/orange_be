@@ -69,7 +69,6 @@ describe('AuthService', () => {
 
   const mockMagicLink: MagicLink = {
     id: 'uuid-1',
-    userId: mockGoogleUser.id,
     user: mockGoogleUser,
     token: 'mocked-token-123',
     createdAt: new Date(),
@@ -93,6 +92,8 @@ describe('AuthService', () => {
             findByEmail: jest.fn(),
             create: jest.fn(),
             findByLinkedInId: jest.fn(),
+            findByFacebookId: jest.fn(),
+            createFacebookUser: jest.fn(),
             createLinkedInUser: jest.fn(),
           },
         },
@@ -150,7 +151,7 @@ describe('AuthService', () => {
 
   describe('Google OAuth', () => {
     it('should return existing user with token', async () => {
-      const findByGoogleIdSpy = jest
+      const findByEmail = jest
         .spyOn(userService, 'findByEmail')
         .mockResolvedValueOnce(mockGoogleUser);
 
@@ -165,7 +166,7 @@ describe('AuthService', () => {
         'google',
       );
 
-      expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
+      expect(findByEmail).toHaveBeenCalledWith('test@example.com');
       expect(createGoogleUserSpy).not.toHaveBeenCalled();
       expect(signSpy).toHaveBeenCalledWith({
         sub: mockGoogleUser.id,
@@ -177,8 +178,8 @@ describe('AuthService', () => {
       });
     });
 
-    it('should create a new user if not found by Google ID', async () => {
-      const findByGoogleIdSpy = jest
+    it('should create a new user if not found by Google Email', async () => {
+      const findByEmail = jest
         .spyOn(userService, 'findByEmail')
         .mockResolvedValueOnce(null);
 
@@ -195,8 +196,13 @@ describe('AuthService', () => {
         'google',
       );
 
-      expect(findByGoogleIdSpy).toHaveBeenCalledWith('google123');
-      expect(createGoogleUserSpy).toHaveBeenCalledWith(mockGoogleProfile);
+      expect(findByEmail).toHaveBeenCalledWith('test@example.com');
+      expect(createGoogleUserSpy).toHaveBeenCalledWith({
+        email: mockGoogleProfile.email,
+        fullName: mockGoogleProfile.fullName,
+        googleId: mockGoogleProfile.id,
+        linkedinId: undefined,
+      });
       expect(signSpy).toHaveBeenCalledWith({
         sub: mockGoogleUser.id,
         email: mockGoogleUser.email,
@@ -208,10 +214,9 @@ describe('AuthService', () => {
 
   describe('LinkedIn OAuth', () => {
     it('should return existing user with token', async () => {
-      const findByLinkedInIdSpy = jest
+      const findByEmail = jest
         .spyOn(userService, 'findByEmail')
         .mockResolvedValueOnce(mockLinkedInUser);
-
       const createLinkedInUserSpy = jest.spyOn(userService, 'create');
 
       const signSpy = jest
@@ -223,7 +228,7 @@ describe('AuthService', () => {
         'linkedin',
       );
 
-      expect(findByLinkedInIdSpy).toHaveBeenCalledWith('linkedin456');
+      expect(findByEmail).toHaveBeenCalledWith('linkedin@example.com');
       expect(createLinkedInUserSpy).not.toHaveBeenCalled();
       expect(signSpy).toHaveBeenCalledWith({
         sub: mockLinkedInUser.id,
@@ -236,7 +241,7 @@ describe('AuthService', () => {
     });
 
     it('should create a new user if not found by LinkedIn ID', async () => {
-      const findByLinkedInIdSpy = jest
+      const findByLinkedEmail = jest
         .spyOn(userService, 'findByEmail')
         .mockResolvedValueOnce(null);
 
@@ -253,8 +258,13 @@ describe('AuthService', () => {
         'linkedin',
       );
 
-      expect(findByLinkedInIdSpy).toHaveBeenCalledWith('linkedin456');
-      expect(createLinkedInUserSpy).toHaveBeenCalledWith(mockLinkedInProfile);
+      expect(findByLinkedEmail).toHaveBeenCalledWith('linkedin@example.com');
+      expect(createLinkedInUserSpy).toHaveBeenCalledWith({
+        email: mockLinkedInProfile.email,
+        fullName: mockLinkedInProfile.fullName,
+        googleId: undefined,
+        linkedinId: mockLinkedInProfile.id,
+      });
       expect(signSpy).toHaveBeenCalledWith({
         sub: mockLinkedInUser.id,
         email: mockLinkedInUser.email,
@@ -374,7 +384,7 @@ describe('AuthService', () => {
 
     it('should return existing user with token', async () => {
       const findByFacebookIdSpy = jest
-        .spyOn(userService, 'findByEmail')
+        .spyOn(userService, 'findByFacebookId')
         .mockResolvedValueOnce(mockFacebookUser);
 
       const createFacebookUserSpy = jest.spyOn(
@@ -418,7 +428,9 @@ describe('AuthService', () => {
         await authService.validateOAuthFacebook(mockFacebookProfile);
 
       expect(findByFacebookIdSpy).toHaveBeenCalledWith('facebook123');
+
       expect(createFacebookUserSpy).toHaveBeenCalledWith(mockFacebookProfile);
+
       expect(signSpy).toHaveBeenCalledWith({
         sub: mockFacebookUser.id,
         email: mockFacebookUser.email,
