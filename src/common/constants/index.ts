@@ -1289,21 +1289,25 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
     .join('\n');
 
   const markersExampleStructure = data.markersData
-    .map(
-      (m, index) => `  {
+    .map((m, index) => {
+      const rangeMatch = m.normalRange.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/);
+      const referenceMin = rangeMatch ? rangeMatch[1] : 'N/A';
+      const referenceMax = rangeMatch ? rangeMatch[2] : 'N/A';
+      return `  {
     "markerId": ${index + 1},
     "markerName": "${m.name}",
     "value": "${m.value}",
     "unit": "${m.unit}",
-    "normalRange": "${m.normalRange}",
+    "referenceMin": "${referenceMin}",
+    "referenceMax": "${referenceMax}",
     "status": "Normal" | "Slightly Low" | "Slightly High" | "Low" | "High" | "Critical",
     "interpretation": {
       "about": "Brief explanation of what this marker measures",
       "whyImportant": "Why this marker is important for health",
       "contextualNote": "Any relevant context based on the value"
     }
-  }`,
-    )
+  }`;
+    })
     .join(',\n');
 
   return `You are providing EDUCATIONAL INFORMATION ONLY, not medical advice.

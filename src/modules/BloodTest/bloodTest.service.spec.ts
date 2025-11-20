@@ -57,7 +57,8 @@ describe('BloodTestService', () => {
         markerName: 'Bilirubin (Total)',
         value: '4.8',
         unit: 'mg/dL',
-        normalRange: '0.1 - 1.2 mg/dL',
+        referenceMin: '0.1',
+        referenceMax: '0.2',
         status: 'High',
         interpretation: {
           about: 'Measures liver function',
@@ -70,7 +71,8 @@ describe('BloodTestService', () => {
         markerName: 'Glucose',
         value: '95',
         unit: 'mg/dL',
-        normalRange: '70 - 100 mg/dL',
+        referenceMin: '70',
+        referenceMax: '100',
         status: 'Normal',
         interpretation: {
           about: 'Measures blood sugar',

@@ -16,7 +16,8 @@ export interface MarkerInterpretation {
   markerName: string;
   value: string;
   unit: string;
-  normalRange: string;
+  referenceMin: string;
+  referenceMax: string;
   status:
     | 'Normal'
     | 'Slightly Low'
