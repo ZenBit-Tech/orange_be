@@ -1222,7 +1222,6 @@ export const markers = [
     max: 5.89,
   },
 ];
-
 export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
   const age = new Date().getFullYear() - data.birthYear;
 
@@ -1290,7 +1289,8 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
 
   const markersExampleStructure = data.markersData
     .map((m, index) => {
-      const rangeMatch = m.normalRange.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/);
+      const safeRange = m.normalRange || '';
+      const rangeMatch = safeRange.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/);
       const referenceMin = rangeMatch ? rangeMatch[1] : 'N/A';
       const referenceMax = rangeMatch ? rangeMatch[2] : 'N/A';
       return `  {
@@ -1300,7 +1300,8 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
     "unit": "${m.unit}",
     "referenceMin": "${referenceMin}",
     "referenceMax": "${referenceMax}",
-    "status": "Normal" | "Slightly Low" | "Slightly High" | "Low" | "High" | "Critical",
+    "zone": "green" | "yellow" | "red",
+    "status": "Normal" | "Slightly Low" | "Slightly High" | "Low" | "High",
     "interpretation": {
       "about": "Brief explanation of what this marker measures",
       "whyImportant": "Why this marker is important for health",
@@ -1312,7 +1313,7 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
 
   return `You are providing EDUCATIONAL INFORMATION ONLY, not medical advice.
 
-  MANDATORY REQUIREMENT - READ CAREFULLY:
+MANDATORY REQUIREMENT - READ CAREFULLY:
 EVERY SINGLE recommendation MUST include phrases like:
 - "Discuss with your doctor about..."
 - "Consult your healthcare provider before..."
@@ -1332,13 +1333,39 @@ ${markersList}
 
 ${data.additionalQuestions ? `USER QUESTION: "${data.additionalQuestions}"` : ''}
 
+ZONE CALCULATION RULES (MANDATORY):
+For each marker, you MUST calculate the zone using these exact rules:
+
+LOW SIDE (when value is below minimum):
+- GREEN: value is between min and max (within normal range)
+- YELLOW: value is between 0.5×min and min (mildly below normal)
+  Example: if min=10, then yellow zone is when value is 5 to 10
+- RED: value is less than 0.5×min (significantly below normal)
+  Example: if min=10, then red zone is when value < 5
+  This means: red = value is 2× LOWER than minimum
+
+HIGH SIDE (when value is above maximum):
+- GREEN: value is between min and max (within normal range)
+- YELLOW: value is between max and 1.5×max (mildly above normal)
+  Example: if max=100, then yellow zone is when value is 100 to 150
+- RED: value is greater than 1.5×max (significantly above normal)
+  Example: if max=100, then red zone is when value > 150
+  This means: red = value is 1.5× HIGHER than maximum
+
+ZONE TO STATUS MAPPING:
+- GREEN → "Normal"
+- YELLOW (low side) → "Slightly Low"
+- YELLOW (high side) → "Slightly High"
+- RED (low side) → "Low"
+- RED (high side) → "High"
+
 CRITICAL INSTRUCTIONS:
 1. Return ONLY valid JSON with no markdown
 2. Each "descriptions" array must have 3-5 strings
 3. EVERY recommendation MUST start with "Discuss with your doctor" or similar phrase
 4. Use educational, cautious language throughout
-5. MANDATORY: Include ALL ${data.markersData.length} markers in "markersInterpretations" array - one object per marker
-
+5. MANDATORY: Include ALL ${data.markersData.length} markers in "markersInterpretations" array
+6. MANDATORY: Calculate zone and status for EACH marker using the rules above
 
 CORRECT EXAMPLES (FOLLOW THIS EXACTLY):
 
@@ -1368,24 +1395,24 @@ Medications - WRONG (DO NOT DO THIS):
 
 JSON STRUCTURE:
 {
-"bloodTestSummary": {
+  "bloodTestSummary": {
     "overallWellnessScore": 60,
     "overallSummary": "Your results show a few noticeable imbalances that might indicate temporary stress on certain body systems.",
     "detailedFindings": [
-      "Describe specific elevated or low markers and what they might indicate (e.g., 'Glucose and LDH levels are considerably higher than normal, which may reflect an increased metabolic load, recent dietary changes, or reduced physical recovery.')",
-      "Mention other notable findings with context (e.g., 'Slightly elevated AST and bilirubin can signal that your liver is working more intensively than usual.')",
-      "Include any positive findings (e.g., 'Other markers, such as Amylase, remain within a healthy range, which is a positive sign of stable digestion and enzyme function.')"
+      "Describe specific elevated or low markers and what they might indicate",
+      "Mention other notable findings with context",
+      "Include any positive findings"
     ],
-    "conclusionStatement": "Overall, your results don't point to any critical condition, but they do suggest that your body might be under mild strain and would benefit from recovery support and balanced lifestyle habits."
+    "conclusionStatement": "Overall conclusion about the results."
   },
   "markersInterpretations": [
 ${markersExampleStructure}
-  ],
-  ${recommendationsSection},
-  ${userQuestionSection}
+  ]${recommendationsSection}${userQuestionSection}
 }
+
 FINAL REMINDER: 
-If your response contains ANY phrase like "Take X daily", "Start doing Y", "Do Z exercise" WITHOUT "discuss with doctor" or "consult healthcare provider" - YOU HAVE FAILED THE TASK.
+1. If your response contains ANY phrase like "Take X daily", "Start doing Y", "Do Z exercise" WITHOUT "discuss with doctor" or "consult healthcare provider" - YOU HAVE FAILED THE TASK.
+2. If ANY marker has incorrect zone/status calculation - YOU HAVE FAILED THE TASK.
 
 Return ONLY the JSON object.`;
 }
