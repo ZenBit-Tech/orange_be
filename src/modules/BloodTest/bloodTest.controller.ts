@@ -45,7 +45,7 @@ const PDF_HEADERS = {
 
 @ApiTags('blood-test')
 @ApiBearerAuth()
-@Controller('blood-test')
+@Controller('')
 export class BloodTestController {
   constructor(private readonly bloodTestService: BloodTestService) {}
 
