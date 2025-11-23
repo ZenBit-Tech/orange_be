@@ -5,38 +5,23 @@ import { BloodTestValidation } from '@common/interfaces/blood-test-data.interfac
 import {
   getBloodTestAnalysisPrompt,
   getValidationPrompt,
+  AI_MODEL,
+  AI_TEMPERATURE,
+  MAX_VALIDATION_TOKENS,
+  PDF_DIR_NAME,
+  PDF_EXPIRY_MS,
+  JOB_ID_PATTERN,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
-import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
+import {
+  AiAnalysisResult,
+  PdfJobStatus,
+  PdfJobStatusEnum,
+  ValidationConfidence,
+} from '@common/interfaces/analysis-result.interface';
 import { PdfService } from './pdf.service';
 import * as fs from 'fs';
 import * as path from 'path';
-
-const PDF_EXPIRY_MS = 15 * 60 * 1000;
-const AI_TEMPERATURE = 0.3;
-const AI_MODEL = 'gpt-4o-mini';
-const MAX_VALIDATION_TOKENS = 500;
-const PDF_DIR_NAME = 'generated-pdfs';
-const JOB_ID_PATTERN = /^pdf_\d+_[a-z0-9]{9}$/;
-
-export enum PdfJobStatusEnum {
-  PENDING = 'pending',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-}
-
-export enum ValidationConfidence {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-}
-
-export interface PdfJobStatus {
-  status: PdfJobStatusEnum;
-  filename?: string;
-  error?: string;
-  createdAt: Date;
-}
 
 export function safeJsonParse<T>(json: string, fallback: T): T {
   let parsed: unknown;
@@ -59,18 +44,19 @@ export function cleanJsonString(str: string): string {
 
 @Injectable()
 export class BloodTestService {
-  private readonly MAX_TOKENS = 4000;
-  private readonly MODEL = 'gpt-4o-mini';
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly PDF_EXPIRY_MS = 15 * 60 * 1000;
-
-  private pdfJobs: Map<string, PdfJobStatus> = new Map();
+  private readonly pdfJobs: Map<string, PdfJobStatus> = new Map();
 
   constructor(
     private readonly openAI: OpenAI,
     private readonly pdfService: PdfService,
   ) {
-    setInterval(() => this.cleanupExpiredPdfs(), 5 * 60 * 1000);
+    setInterval(
+      () => {
+        this.cleanupExpiredPdfs();
+      },
+      5 * 60 * 1000,
+    );
   }
 
   async analyzeBloodTest(
@@ -79,9 +65,9 @@ export class BloodTestService {
     try {
       const prompt = getBloodTestAnalysisPrompt(testResults);
       const completion = await this.openAI.chat.completions.create({
-        model: this.MODEL,
+        model: AI_MODEL,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
+        temperature: AI_TEMPERATURE,
         max_tokens: 8000,
         response_format: { type: 'json_object' },
       });
@@ -98,7 +84,7 @@ export class BloodTestService {
         throw new Error('Failed to parse AI JSON response: not an object');
       }
 
-      const pdfJobId = `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const pdfJobId = this.generateJobId();
 
       this.pdfJobs.set(pdfJobId, {
         status: PdfJobStatusEnum.PENDING,
@@ -112,14 +98,20 @@ export class BloodTestService {
         pdfJobId,
       };
     } catch (error) {
+      this.logger.error('AI Analysis Failed:', error);
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`AI Analysis Failed: ${errorMessage}`);
     }
   }
 
+  private generateJobId(): string {
+    return `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
   private validateJobId(jobId: string): boolean {
-    return JOB_ID_PATTERN.test(jobId);
+    const pattern: RegExp = JOB_ID_PATTERN;
+    return pattern.test(jobId);
   }
 
   private generatePdfInBackground(
@@ -152,9 +144,10 @@ export class BloodTestService {
 
           this.logger.log(`PDF generated successfully: ${filename}`);
 
+          const expiryTime: number = PDF_EXPIRY_MS;
           setTimeout(() => {
             this.deletePdf(jobId);
-          }, PDF_EXPIRY_MS);
+          }, expiryTime);
         } catch (error) {
           this.logger.error('Background PDF generation failed:', error);
 
@@ -171,7 +164,8 @@ export class BloodTestService {
   }
 
   private getPdfDirectory(): string {
-    return path.join(process.cwd(), PDF_DIR_NAME);
+    const dirName: string = PDF_DIR_NAME;
+    return path.join(process.cwd(), dirName);
   }
 
   private ensureDirectoryExists(dirPath: string): void {
@@ -260,10 +254,11 @@ export class BloodTestService {
   private cleanupExpiredPdfs(): void {
     const now = Date.now();
     const expiredJobs: string[] = [];
+    const expiryMs: number = PDF_EXPIRY_MS;
 
     this.pdfJobs.forEach((job, jobId) => {
       const age = now - job.createdAt.getTime();
-      if (age > PDF_EXPIRY_MS) {
+      if (age > expiryMs) {
         expiredJobs.push(jobId);
       }
     });
@@ -280,12 +275,15 @@ export class BloodTestService {
   async validateBloodTest(values: BloodTestData): Promise<BloodTestValidation> {
     try {
       const prompt = getValidationPrompt(values);
+      const model: string = AI_MODEL;
+      const temperature: number = AI_TEMPERATURE;
+      const maxTokens: number = MAX_VALIDATION_TOKENS;
 
       const completion = await this.openAI.chat.completions.create({
-        model: AI_MODEL,
+        model: model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: AI_TEMPERATURE,
-        max_tokens: MAX_VALIDATION_TOKENS,
+        temperature: temperature,
+        max_tokens: maxTokens,
       });
 
       const content = completion.choices[0]?.message?.content || '';

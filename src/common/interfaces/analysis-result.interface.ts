@@ -46,3 +46,22 @@ export interface AiAnalysisResult {
   exerciseRecommendations?: RecommendationWrapper;
   userQuestionResponse?: UserQuestionResponse;
 }
+
+export enum PdfJobStatusEnum {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export enum ValidationConfidence {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+}
+
+export interface PdfJobStatus {
+  status: PdfJobStatusEnum;
+  filename?: string;
+  error?: string;
+  createdAt: Date;
+}

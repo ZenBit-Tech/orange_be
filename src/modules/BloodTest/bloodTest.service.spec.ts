@@ -1,6 +1,4 @@
 /* eslint-disable */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Test, TestingModule } from '@nestjs/testing';
 import { BloodTestService } from './bloodTest.service';
 import { PdfService } from './pdf.service';
@@ -9,6 +7,7 @@ import { ChatCompletion } from 'openai/resources';
 import * as fs from 'fs';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
+import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 
 jest.mock('fs');
 jest.mock('path');
@@ -47,6 +46,17 @@ describe('BloodTestService', () => {
     exerciseGuidelines: false,
     additionalQuestions: 'Why is my cholesterol high?',
   };
+
+  const mockBloodTestData: BloodTestData = [
+    {
+      id: '1',
+      name: 'Glucose',
+      value: 95,
+      unit: 'mg/dL',
+      referenceMin: 70,
+      referenceMax: 100,
+    },
+  ];
 
   const mockAiResponse: AiAnalysisResult = {
     bloodTestSummary: {
@@ -421,7 +431,6 @@ describe('BloodTestService', () => {
 
       const result = await service.analyzeBloodTest(mockTestResults);
 
-      // Check that job is in pending state
       const jobStatus = service.getPdfJobStatus(result.pdfJobId);
       expect(jobStatus).toBeDefined();
       expect(jobStatus?.status).toBe('pending');
@@ -500,7 +509,6 @@ describe('BloodTestService', () => {
 
       const result = await service.analyzeBloodTest(mockTestResults);
 
-      // Run pending background tasks
       await jest.runAllTimersAsync();
 
       const status = service.getPdfJobStatus(result.pdfJobId);
@@ -510,8 +518,8 @@ describe('BloodTestService', () => {
   });
 
   describe('getPdfByJobId', () => {
-    it('should return null for non-existent job', async () => {
-      const pdf = await service.getPdfByJobId('non-existent-job');
+    it('should return null for non-existent job', () => {
+      const pdf = service.getPdfByJobId('non-existent-job');
       expect(pdf).toBeNull();
     });
 
@@ -531,7 +539,7 @@ describe('BloodTestService', () => {
       );
 
       const result = await service.analyzeBloodTest(mockTestResults);
-      const pdf = await service.getPdfByJobId(result.pdfJobId);
+      const pdf = service.getPdfByJobId(result.pdfJobId);
 
       expect(pdf).toBeNull();
     });
@@ -562,7 +570,7 @@ describe('BloodTestService', () => {
 
       await jest.runAllTimersAsync();
 
-      const pdf = await service.getPdfByJobId(result.pdfJobId);
+      const pdf = service.getPdfByJobId(result.pdfJobId);
       expect(pdf).toEqual(mockPdfBuffer);
     });
   });
@@ -585,7 +593,7 @@ describe('BloodTestService', () => {
         ],
       } as Partial<ChatCompletion>);
 
-      const result = await service.validateBloodTest({} as any);
+      const result = await service.validateBloodTest(mockBloodTestData);
 
       expect(result).toEqual(mockValidation);
       expect(mockCreate).toHaveBeenCalledTimes(1);
@@ -602,7 +610,7 @@ describe('BloodTestService', () => {
         ],
       } as Partial<ChatCompletion>);
 
-      const result = await service.validateBloodTest({} as any);
+      const result = await service.validateBloodTest(mockBloodTestData);
 
       expect(result).toEqual({
         isBloodTest: false,
@@ -614,7 +622,7 @@ describe('BloodTestService', () => {
     it('should handle API errors gracefully', async () => {
       mockCreate.mockRejectedValueOnce(new Error('API Error'));
 
-      const result = await service.validateBloodTest({} as any);
+      const result = await service.validateBloodTest(mockBloodTestData);
 
       expect(result).toEqual({
         isBloodTest: false,

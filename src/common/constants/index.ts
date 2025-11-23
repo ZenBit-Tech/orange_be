@@ -1431,3 +1431,10 @@ Analyze this data and respond ONLY with valid JSON (no markdown, no code blocks)
   "confidence": "low" | "medium" | "high"
 }`;
 }
+
+export const AI_MODEL: string = 'gpt-4o-mini';
+export const AI_TEMPERATURE: number = 0.3;
+export const MAX_VALIDATION_TOKENS: number = 500;
+export const PDF_DIR_NAME: string = 'generated-pdfs';
+export const PDF_EXPIRY_MS: number = 15 * 60 * 1000;
+export const JOB_ID_PATTERN: RegExp = /^pdf_\d+_[a-z0-9]{9}$/;

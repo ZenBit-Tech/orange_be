@@ -17,11 +17,7 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
-import {
-  BloodTestService,
-  PdfJobStatus,
-  PdfJobStatusEnum,
-} from './bloodTest.service';
+import { BloodTestService } from './bloodTest.service';
 import type {
   BloodTestData,
   BloodTestValidation,
@@ -29,6 +25,10 @@ import type {
 import { AuthGuard } from '@modules/auth/guards/auth.guard';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import { Response } from 'express';
+import {
+  PdfJobStatus,
+  PdfJobStatusEnum,
+} from '@common/interfaces/analysis-result.interface';
 
 const ERROR_MESSAGES = {
   PDF_JOB_NOT_FOUND: 'PDF job not found',
