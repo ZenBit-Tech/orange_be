@@ -1,6 +1,6 @@
 export interface BloodTestSummary {
   overallWellnessScore: number;
-  summary: string;
+  overallSummary: string;
   detailedFindings: string[];
   conclusionStatement: string;
 }

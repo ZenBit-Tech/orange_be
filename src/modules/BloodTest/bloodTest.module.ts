@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { BloodTestController } from './bloodTest.controller';
 import { BloodTestService } from './bloodTest.service';
+import { PdfService } from './pdf.service';
 
 @Module({
   imports: [ConfigModule],
@@ -18,7 +19,8 @@ import { BloodTestService } from './bloodTest.service';
       inject: [ConfigService],
     },
     BloodTestService,
+    PdfService,
   ],
-  exports: [BloodTestService],
+  exports: [BloodTestService, PdfService],
 })
 export class BloodTestModule {}
