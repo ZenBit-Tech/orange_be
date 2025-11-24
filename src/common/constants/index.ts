@@ -1287,12 +1287,59 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
     )
     .join('\n');
 
+  const calculateStatus = (value: number, min: number, max: number): string => {
+    if (value >= min && value <= max) return 'Normal';
+    if (value < min) {
+      const slightlyLowThreshold = min * 0.5;
+      const criticalLowThreshold = min * 0.3;
+      if (value < criticalLowThreshold) return 'Critical';
+      if (value < slightlyLowThreshold) return 'Low';
+      return 'Slightly Low';
+    }
+    if (value > max) {
+      const slightlyHighThreshold = max * 1.5;
+      const criticalHighThreshold = max * 2.0;
+
+      if (value > criticalHighThreshold) return 'Critical';
+      if (value > slightlyHighThreshold) return 'High';
+      return 'Slightly High';
+    }
+    return 'Normal';
+  };
+
+  const precalculatedStatuses = data.markersData
+    .map((m, index) => {
+      const safeRange = m.normalRange || '';
+      const rangeMatch = safeRange.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/);
+      if (!rangeMatch) return null;
+
+      const min = parseFloat(rangeMatch[1]);
+      const max = parseFloat(rangeMatch[2]);
+      const val = parseFloat(m.value);
+
+      const status = calculateStatus(val, min, max);
+      const threshold = val > max ? max * 1.5 : min * 0.5;
+
+      return `Marker ${index + 1} (${m.name}): value=${val}, range=${min}-${max}, threshold=${threshold.toFixed(2)}, STATUS="${status}"`;
+    })
+    .filter(Boolean)
+    .join('\n');
+
   const markersExampleStructure = data.markersData
     .map((m, index) => {
       const safeRange = m.normalRange || '';
       const rangeMatch = safeRange.match(/(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/);
       const referenceMin = rangeMatch ? rangeMatch[1] : 'N/A';
       const referenceMax = rangeMatch ? rangeMatch[2] : 'N/A';
+
+      let calculatedStatus = '"Normal"';
+      if (rangeMatch) {
+        const min = parseFloat(rangeMatch[1]);
+        const max = parseFloat(rangeMatch[2]);
+        const val = parseFloat(m.value);
+        calculatedStatus = `"${calculateStatus(val, min, max)}"`;
+      }
+
       return `  {
     "markerId": ${index + 1},
     "markerName": "${m.name}",
@@ -1300,8 +1347,7 @@ export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
     "unit": "${m.unit}",
     "referenceMin": "${referenceMin}",
     "referenceMax": "${referenceMax}",
-    "zone": "green" | "yellow" | "red",
-    "status": "Normal" | "Slightly Low" | "Slightly High" | "Low" | "High",
+    "status": ${calculatedStatus},
     "interpretation": {
       "about": "Brief explanation of what this marker measures",
       "whyImportant": "Why this marker is important for health",
@@ -1331,43 +1377,24 @@ ${data.pregnancy ? `- Pregnancy status: ${data.pregnancy}` : ''}
 BLOOD TEST MARKERS (TOTAL: ${data.markersData.length} markers):
 ${markersList}
 
+PRE-CALCULATED STATUSES (USE THESE EXACT VALUES - DO NOT RECALCULATE):
+${precalculatedStatuses}
+
+CRITICAL: The statuses above have been mathematically calculated using the correct algorithm.
+You MUST use these exact status values in your JSON response.
+DO NOT recalculate or override these values based on medical interpretation.
+Simply copy the STATUS value for each marker into your JSON.
+
 ${data.additionalQuestions ? `USER QUESTION: "${data.additionalQuestions}"` : ''}
-
-ZONE CALCULATION RULES (MANDATORY):
-For each marker, you MUST calculate the zone using these exact rules:
-
-LOW SIDE (when value is below minimum):
-- GREEN: value is between min and max (within normal range)
-- YELLOW: value is between 0.5×min and min (mildly below normal)
-  Example: if min=10, then yellow zone is when value is 5 to 10
-- RED: value is less than 0.5×min (significantly below normal)
-  Example: if min=10, then red zone is when value < 5
-  This means: red = value is 2× LOWER than minimum
-
-HIGH SIDE (when value is above maximum):
-- GREEN: value is between min and max (within normal range)
-- YELLOW: value is between max and 1.5×max (mildly above normal)
-  Example: if max=100, then yellow zone is when value is 100 to 150
-- RED: value is greater than 1.5×max (significantly above normal)
-  Example: if max=100, then red zone is when value > 150
-  This means: red = value is 1.5× HIGHER than maximum
-
-ZONE TO STATUS MAPPING:
-- GREEN → "Normal"
-- YELLOW (low side) → "Slightly Low"
-- YELLOW (high side) → "Slightly High"
-- RED (low side) → "Low"
-- RED (high side) → "High"
 
 CRITICAL INSTRUCTIONS:
 1. Return ONLY valid JSON with no markdown
-2. Each "descriptions" array must have 3-5 strings
-3. EVERY recommendation MUST start with "Discuss with your doctor" or similar phrase
-4. Use educational, cautious language throughout
-5. MANDATORY: Include ALL ${data.markersData.length} markers in "markersInterpretations" array
-6. MANDATORY: Calculate zone and status for EACH marker using the rules above
+2. Use the PRE-CALCULATED STATUSES exactly as provided above
+3. Each "descriptions" array must have 3-5 strings
+4. EVERY recommendation MUST start with "Discuss with your doctor" or similar phrase
+5. Use educational, cautious language throughout
+6. MANDATORY: Include ALL ${data.markersData.length} markers in "markersInterpretations" array
 
-CORRECT EXAMPLES (FOLLOW THIS EXACTLY):
 
 Supplements - CORRECT:
 "Discuss with your doctor about Omega-3 Fish Oil supplementation (1000-2000mg EPA+DHA daily). Your healthcare provider can determine if this is appropriate for your situation and check for any medication interactions. Studies suggest omega-3s may support cardiovascular health when used under medical supervision."
@@ -1392,8 +1419,7 @@ Medications - CORRECT:
 
 Medications - WRONG (DO NOT DO THIS):
 "Hepatoprotective agents (High priority). These medications help protect the liver. For fatty liver disease."
-
-JSON STRUCTURE:
+JSON STRUCTURE (use the pre-calculated status values):
 {
   "bloodTestSummary": {
     "overallWellnessScore": 60,
@@ -1410,9 +1436,10 @@ ${markersExampleStructure}
   ]${recommendationsSection}${userQuestionSection}
 }
 
-FINAL REMINDER: 
-1. If your response contains ANY phrase like "Take X daily", "Start doing Y", "Do Z exercise" WITHOUT "discuss with doctor" or "consult healthcare provider" - YOU HAVE FAILED THE TASK.
-2. If ANY marker has incorrect zone/status calculation - YOU HAVE FAILED THE TASK.
+FINAL REMINDER:
+- Use the PRE-CALCULATED STATUS for each marker - they are already correct
+- Every recommendation MUST include "Discuss with your doctor" or similar phrase
+- Return ONLY the JSON object with NO markdown formatting
 
 Return ONLY the JSON object.`;
 }
