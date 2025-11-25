@@ -16,7 +16,8 @@
       "@config/*": ["src/config/*"],
       "@database/*": ["src/database/*"],
       "@common/*": ["src/common/*"],
-      "utils/*": ["src/utils/*"]
+      "utils/*": ["src/utils/*"],
+      "@prompts/*": ["src/prompts/*"]
     },
     "incremental": true,
     "skipLibCheck": true,

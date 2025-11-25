@@ -128,6 +128,7 @@
     ],
     "coverageDirectory": "../coverage",
     "moduleNameMapper": {
+      "^@prompts/(.*)$": "<rootDir>/prompts/$1",
       "^@modules/(.*)$": "<rootDir>/modules/$1",
       "^@database/(.*)$": "<rootDir>/database/$1",
       "^@config/(.*)$": "<rootDir>/config/$1",

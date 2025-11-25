@@ -2,12 +2,10 @@ import { Injectable } from '@nestjs/common';
 import OpenAI from 'openai';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BloodTestValidation } from '@common/interfaces/blood-test-data.interface';
-import {
-  getBloodTestAnalysisPrompt,
-  getValidationPrompt,
-} from '@common/constants';
+import { getValidationPrompt } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.inteface';
+import { getBloodTestAnalysisPrompt } from '@prompts/getBloodTestAnalysis';
 
 export function safeJsonParse<T>(json: string, fallback: T): T {
   let parsed: unknown;
@@ -28,6 +26,16 @@ export function cleanJsonString(str: string): string {
   return cleaned;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
+}
+
 @Injectable()
 export class BloodTestService {
   private readonly MAX_TOKENS = 4000;
@@ -39,7 +47,7 @@ export class BloodTestService {
     testResults: CreateReviewDataDto,
   ): Promise<AiAnalysisResult> {
     try {
-      const prompt = getBloodTestAnalysisPrompt(testResults);
+      const prompt: string = getBloodTestAnalysisPrompt(testResults);
       const completion = await this.openAI.chat.completions.create({
         model: this.MODEL,
         messages: [{ role: 'user', content: prompt }],
@@ -62,8 +70,7 @@ export class BloodTestService {
 
       return parsed;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       throw new Error(`AI Analysis Failed: ${errorMessage}`);
     }
   }
