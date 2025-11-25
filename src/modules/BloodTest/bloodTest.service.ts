@@ -61,7 +61,7 @@ export class BloodTestService {
 
   async analyzeBloodTest(
     testResults: CreateReviewDataDto,
-  ): Promise<{ analysis: AiAnalysisResult; pdfJobId: string }> {
+  ): Promise<AiAnalysisResult> {
     try {
       const prompt = getBloodTestAnalysisPrompt(testResults);
       const completion = await this.openAI.chat.completions.create({
@@ -94,7 +94,7 @@ export class BloodTestService {
       this.generatePdfInBackground(testResults, parsed, pdfJobId);
 
       return {
-        analysis: parsed,
+        ...parsed,
         pdfJobId,
       };
     } catch (error) {

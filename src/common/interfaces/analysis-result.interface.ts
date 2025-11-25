@@ -45,6 +45,7 @@ export interface AiAnalysisResult {
   drugsRecommendations?: RecommendationWrapper;
   exerciseRecommendations?: RecommendationWrapper;
   userQuestionResponse?: UserQuestionResponse;
+  pdfJobId: string;
 }
 
 export enum PdfJobStatusEnum {

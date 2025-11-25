@@ -26,6 +26,7 @@ import { AuthGuard } from '@modules/auth/guards/auth.guard';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import { Response } from 'express';
 import {
+  AiAnalysisResult,
   PdfJobStatus,
   PdfJobStatusEnum,
 } from '@common/interfaces/analysis-result.interface';
@@ -60,7 +61,7 @@ export class BloodTestController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  analyze(@Body() data: CreateReviewDataDto) {
+  analyze(@Body() data: CreateReviewDataDto): Promise<AiAnalysisResult> {
     return this.bloodTestService.analyzeBloodTest(data);
   }
 
