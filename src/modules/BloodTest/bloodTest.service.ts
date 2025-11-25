@@ -12,7 +12,6 @@ import {
   JOB_ID_PATTERN,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
-import { getBloodTestAnalysisPrompt } from '@prompts/getBloodTestAnalysis';
 import {
   AiAnalysisResult,
   PdfJobStatus,
@@ -22,6 +21,11 @@ import {
 import { PdfService } from './pdf.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+  getMarkersChunkPrompt,
+  getSummaryAndRecsPrompt,
+  SingleMarkerDto,
+} from '@prompts/analysis.prompt';
 
 export function safeJsonParse<T>(json: string, fallback: T): T {
   let parsed: unknown;
@@ -52,6 +56,18 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
+interface MarkersChunkResponse {
+  markersInterpretations: AiAnalysisResult['markersInterpretations'];
+}
+
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    result.push(array.slice(i, i + size));
+  }
+  return result;
+}
+
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
@@ -73,26 +89,60 @@ export class BloodTestService {
     testResults: CreateReviewDataDto,
   ): Promise<AiAnalysisResult> {
     try {
-      const prompt: string = getBloodTestAnalysisPrompt(testResults);
-      const completion = await this.openAI.chat.completions.create({
-        model: AI_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: AI_TEMPERATURE,
-        max_tokens: 8000,
+      const BATCH_SIZE = 10;
+      const markerChunks: SingleMarkerDto[][] = chunkArray(
+        testResults.markersData,
+        BATCH_SIZE,
+      );
+
+      const summaryPromise = this.openAI.chat.completions.create({
+        model: 'gpt-4o',
+        temperature: 0.3,
         response_format: { type: 'json_object' },
+        messages: [
+          { role: 'user', content: getSummaryAndRecsPrompt(testResults) },
+        ],
       });
-      const rawContent = completion.choices[0]?.message?.content;
 
-      if (typeof rawContent !== 'string') {
-        throw new Error('AI returned invalid content');
+      const chunkPromises = markerChunks.map((chunk) =>
+        this.openAI.chat.completions.create({
+          model: 'gpt-4o',
+          temperature: 0.3,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'user', content: getMarkersChunkPrompt(chunk) }],
+        }),
+      );
+
+      const [summaryResponse, ...chunksResponses] = await Promise.all([
+        summaryPromise,
+        ...chunkPromises,
+      ]);
+
+      const summaryRaw = summaryResponse.choices[0]?.message?.content || '{}';
+      const summaryJson = safeJsonParse<AiAnalysisResult>(
+        summaryRaw,
+        {} as AiAnalysisResult,
+      );
+
+      const allMarkersInterpretations: AiAnalysisResult['markersInterpretations'] =
+        [];
+
+      for (const response of chunksResponses) {
+        const chunkRaw = response.choices[0]?.message?.content || '{}';
+
+        const chunkJson = safeJsonParse<MarkersChunkResponse>(chunkRaw, {
+          markersInterpretations: [],
+        });
+
+        if (Array.isArray(chunkJson.markersInterpretations)) {
+          allMarkersInterpretations.push(...chunkJson.markersInterpretations);
+        }
       }
 
-      const cleaned = cleanJsonString(rawContent);
-      const parsed = safeJsonParse<AiAnalysisResult>(cleaned, null);
-
-      if (parsed === null || typeof parsed !== 'object') {
-        throw new Error('Failed to parse AI JSON response: not an object');
-      }
+      const finalResult: AiAnalysisResult = {
+        ...summaryJson,
+        markersInterpretations: allMarkersInterpretations,
+      };
 
       const pdfJobId = this.generateJobId();
 
@@ -100,16 +150,15 @@ export class BloodTestService {
         status: PdfJobStatusEnum.PENDING,
         createdAt: new Date(),
       });
-
-      this.generatePdfInBackground(testResults, parsed, pdfJobId);
+      this.generatePdfInBackground(testResults, finalResult, pdfJobId);
 
       return {
-        ...parsed,
+        ...finalResult,
         pdfJobId,
       };
     } catch (error) {
-      const errorMessage = getErrorMessage(error);
-      throw new Error(`AI Analysis Failed: ${errorMessage}`);
+      const err = error as Error;
+      getErrorMessage(err);
     }
   }
 
