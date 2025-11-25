@@ -1,3 +1,4 @@
+import { PdfJobStatusEnum } from '@common/interfaces/analysis-result.interface';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 
 /* eslint-disable no-useless-escape */
@@ -1270,3 +1271,23 @@ export const MAX_VALIDATION_TOKENS: number = 500;
 export const PDF_DIR_NAME: string = 'generated-pdfs';
 export const PDF_EXPIRY_MS: number = 15 * 60 * 1000;
 export const JOB_ID_PATTERN: RegExp = /^pdf_\d+_[a-z0-9]+$/;
+
+export interface PdfCacheEntry {
+  buffer: Buffer;
+  createdAt: Date;
+  status: PdfJobStatusEnum;
+  error?: string;
+}
+
+export const ERROR_MESSAGES = {
+  PDF_JOB_NOT_FOUND: 'PDF job not found',
+  PDF_STILL_GENERATING: 'PDF is still being generated',
+  PDF_GENERATION_FAILED: 'PDF generation failed',
+  PDF_NOT_FOUND_OR_EXPIRED: 'PDF file not found or expired',
+  INVALID_JOB_ID: 'Invalid job ID format',
+} as const;
+
+export const PDF_HEADERS = {
+  CONTENT_TYPE: 'application/pdf',
+  FILENAME: 'health-report.pdf',
+} as const;

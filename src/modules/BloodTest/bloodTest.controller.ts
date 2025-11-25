@@ -9,6 +9,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -25,25 +26,12 @@ import type {
 } from '@common/interfaces/blood-test-data.interface';
 import { AuthGuard } from '@modules/auth/guards/auth.guard';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
-import { Response } from 'express';
 import {
   AiAnalysisResult,
   PdfJobStatus,
   PdfJobStatusEnum,
 } from '@common/interfaces/analysis-result.interface';
-
-const ERROR_MESSAGES = {
-  PDF_JOB_NOT_FOUND: 'PDF job not found',
-  PDF_STILL_GENERATING: 'PDF is still being generated',
-  PDF_GENERATION_FAILED: 'PDF generation failed',
-  PDF_NOT_FOUND_OR_EXPIRED: 'PDF file not found or expired',
-  INVALID_JOB_ID: 'Invalid job ID format',
-} as const;
-
-const PDF_HEADERS = {
-  CONTENT_TYPE: 'application/pdf',
-  FILENAME: 'health-report.pdf',
-} as const;
+import { ERROR_MESSAGES, PDF_HEADERS } from '@common/constants';
 
 @ApiTags('blood-test')
 @ApiBearerAuth()

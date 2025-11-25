@@ -7,9 +7,9 @@ import {
   AI_MODEL,
   AI_TEMPERATURE,
   MAX_VALIDATION_TOKENS,
-  PDF_DIR_NAME,
   PDF_EXPIRY_MS,
   JOB_ID_PATTERN,
+  PdfCacheEntry,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import {
@@ -19,8 +19,6 @@ import {
   ValidationConfidence,
 } from '@common/interfaces/analysis-result.interface';
 import { PdfService } from './pdf.service';
-import * as fs from 'fs';
-import * as path from 'path';
 import {
   getMarkersChunkPrompt,
   getSummaryAndRecsPrompt,
@@ -71,7 +69,7 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly pdfJobs: Map<string, PdfJobStatus> = new Map();
+  private readonly pdfCache: Map<string, PdfCacheEntry> = new Map();
 
   constructor(
     private readonly openAI: OpenAI,
@@ -146,10 +144,12 @@ export class BloodTestService {
 
       const pdfJobId = this.generateJobId();
 
-      this.pdfJobs.set(pdfJobId, {
+      this.pdfCache.set(pdfJobId, {
+        buffer: Buffer.from([]),
         status: PdfJobStatusEnum.PENDING,
         createdAt: new Date(),
       });
+
       this.generatePdfInBackground(testResults, finalResult, pdfJobId);
 
       return {
@@ -158,7 +158,8 @@ export class BloodTestService {
       };
     } catch (error) {
       const err = error as Error;
-      getErrorMessage(err);
+      this.logger.error('Blood test analysis error:', getErrorMessage(err));
+      throw error;
     }
   }
 
@@ -179,27 +180,19 @@ export class BloodTestService {
     setImmediate(() => {
       (async () => {
         try {
-          const pdf = await this.pdfService.generateHealthReportPdf(
+          const pdfBuffer = await this.pdfService.generateHealthReportPdf(
             analysisResult,
             data,
             false,
           );
 
-          const pdfDir = this.getPdfDirectory();
-          this.ensureDirectoryExists(pdfDir);
-
-          const filename = this.sanitizeFilename(`${jobId}.pdf`);
-          const filepath = path.join(pdfDir, filename);
-
-          fs.writeFileSync(filepath, pdf);
-
-          this.pdfJobs.set(jobId, {
+          this.pdfCache.set(jobId, {
+            buffer: pdfBuffer,
             status: PdfJobStatusEnum.COMPLETED,
-            filename,
             createdAt: new Date(),
           });
 
-          this.logger.log(`PDF generated successfully: ${filename}`);
+          this.logger.log(`PDF generated successfully for job: ${jobId}`);
 
           const expiryTime: number = PDF_EXPIRY_MS;
           setTimeout(() => {
@@ -208,7 +201,8 @@ export class BloodTestService {
         } catch (error) {
           this.logger.error('Background PDF generation failed:', error);
 
-          this.pdfJobs.set(jobId, {
+          this.pdfCache.set(jobId, {
+            buffer: Buffer.from([]),
             status: PdfJobStatusEnum.FAILED,
             error: error instanceof Error ? error.message : 'Unknown error',
             createdAt: new Date(),
@@ -220,27 +214,22 @@ export class BloodTestService {
     });
   }
 
-  private getPdfDirectory(): string {
-    const dirName: string = PDF_DIR_NAME;
-    return path.join(process.cwd(), dirName);
-  }
-
-  private ensureDirectoryExists(dirPath: string): void {
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-  }
-
-  private sanitizeFilename(filename: string): string {
-    return path.basename(filename).replace(/[^a-zA-Z0-9._-]/g, '_');
-  }
-
   getPdfJobStatus(jobId: string): PdfJobStatus | null {
     if (!this.validateJobId(jobId)) {
       this.logger.warn(`Invalid job ID format: ${jobId}`);
       return null;
     }
-    return this.pdfJobs.get(jobId) || null;
+
+    const entry = this.pdfCache.get(jobId);
+    if (!entry) {
+      return null;
+    }
+
+    return {
+      status: entry.status,
+      createdAt: entry.createdAt,
+      error: entry.error,
+    };
   }
 
   getPdfByJobId(jobId: string): Buffer | null {
@@ -249,60 +238,21 @@ export class BloodTestService {
       return null;
     }
 
-    const job = this.pdfJobs.get(jobId);
+    const entry = this.pdfCache.get(jobId);
 
-    if (!job || job.status !== PdfJobStatusEnum.COMPLETED || !job.filename) {
+    if (!entry || entry.status !== PdfJobStatusEnum.COMPLETED) {
       return null;
     }
 
-    try {
-      const pdfDir = this.getPdfDirectory();
-      const sanitizedFilename = this.sanitizeFilename(job.filename);
-      const filepath = path.join(pdfDir, sanitizedFilename);
-
-      const resolvedPath = path.resolve(filepath);
-      const resolvedPdfDir = path.resolve(pdfDir);
-
-      if (!resolvedPath.startsWith(resolvedPdfDir)) {
-        this.logger.error(`Path traversal attempt detected: ${jobId}`);
-        return null;
-      }
-
-      if (fs.existsSync(filepath)) {
-        return fs.readFileSync(filepath);
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error('Error reading PDF:', error);
-      return null;
-    }
+    return entry.buffer;
   }
 
   private deletePdf(jobId: string): void {
     try {
-      const job = this.pdfJobs.get(jobId);
-
-      if (job && job.filename) {
-        const pdfDir = this.getPdfDirectory();
-        const sanitizedFilename = this.sanitizeFilename(job.filename);
-        const filepath = path.join(pdfDir, sanitizedFilename);
-
-        const resolvedPath = path.resolve(filepath);
-        const resolvedPdfDir = path.resolve(pdfDir);
-
-        if (!resolvedPath.startsWith(resolvedPdfDir)) {
-          this.logger.error(`Path traversal attempt in delete: ${jobId}`);
-          return;
-        }
-
-        if (fs.existsSync(filepath)) {
-          fs.unlinkSync(filepath);
-          this.logger.log(`PDF deleted: ${sanitizedFilename}`);
-        }
+      const deleted = this.pdfCache.delete(jobId);
+      if (deleted) {
+        this.logger.log(`PDF removed from memory: ${jobId}`);
       }
-
-      this.pdfJobs.delete(jobId);
     } catch (error) {
       this.logger.error(`Error deleting PDF for job ${jobId}:`, error);
     }
@@ -313,8 +263,8 @@ export class BloodTestService {
     const expiredJobs: string[] = [];
     const expiryMs: number = PDF_EXPIRY_MS;
 
-    this.pdfJobs.forEach((job, jobId) => {
-      const age = now - job.createdAt.getTime();
+    this.pdfCache.forEach((entry, jobId) => {
+      const age = now - entry.createdAt.getTime();
       if (age > expiryMs) {
         expiredJobs.push(jobId);
       }
@@ -325,7 +275,9 @@ export class BloodTestService {
     });
 
     if (expiredJobs.length > 0) {
-      this.logger.log(`Cleaned up ${expiredJobs.length} expired PDFs`);
+      this.logger.log(
+        `Cleaned up ${expiredJobs.length} expired PDFs from memory`,
+      );
     }
   }
 
