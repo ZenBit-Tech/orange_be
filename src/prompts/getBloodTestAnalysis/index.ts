@@ -5,6 +5,24 @@ import { formatPrecalculatedStatuses } from 'utils/analysisPrompt/precalculatedS
 import { formatUserQuestionSection } from 'utils/analysisPrompt/questionSection';
 import { formatRecommendationsSection } from 'utils/analysisPrompt/recommendationSection';
 
+/**
+ * Generates the comprehensive prompt string used to query the LLM for blood test analysis.
+ *
+ * **Before (Input):**
+ * - `data`: A DTO containing patient demographics (birth year, gender),
+ * the list of blood markers, pre-calculated statuses, and optional user questions.
+ *
+ * **Logic:**
+ * 1. Calculates the patient's age based on `birthYear`.
+ * 2. Formats specific sub-sections (recommendations, questions, markers) using helper functions.
+ * 3. Injects strict "Safety Guardrails" (e.g., "Discuss with your doctor") to prevent medical liability.
+ * 4. Enforces the pre-calculated statuses so the AI doesn't hallucinate new statuses.
+ *
+ * **After (Output):**
+ * - Returns a raw string containing the system instructions, patient data,
+ * and the required JSON schema for the AI to fill.
+ */
+
 export function getBloodTestAnalysisPrompt(data: CreateReviewDataDto): string {
   const age = new Date().getFullYear() - data.birthYear;
 

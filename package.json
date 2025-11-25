@@ -128,11 +128,11 @@
     ],
     "coverageDirectory": "../coverage",
     "moduleNameMapper": {
-      "^@prompts/(.*)$": "<rootDir>/prompts/$1",
       "^@modules/(.*)$": "<rootDir>/modules/$1",
       "^@database/(.*)$": "<rootDir>/database/$1",
       "^@config/(.*)$": "<rootDir>/config/$1",
       "^@common/(.*)$": "<rootDir>/common/$1",
+      "^@prompts/(.*)$": "<rootDir>/prompts/$1",
       "^utils/(.*)$": "<rootDir>/utils/$1"
     },
     "testEnvironment": "node",

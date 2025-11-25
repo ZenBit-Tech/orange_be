@@ -1,3 +1,17 @@
+/**
+ * Calculates the severity status of a value based on a specific range.
+ *
+ * **Before (Inputs):**
+ * - `value`: The raw number to be evaluated.
+ * - `min`: The minimum threshold for the 'Normal' range.
+ * - `max`: The maximum threshold for the 'Normal' range.
+ *
+ * **After (Output):**
+ * - Returns a specific string label describing where the value falls relative to the range:
+ * - 'Normal': The value is safe (between min and max).
+ * - 'Slightly Low' / 'Low' / 'Critical': The value is below min (based on 50% and 30% thresholds).
+ * - 'Slightly High' / 'High' / 'Critical': The value is above max (based on 150% and 200% thresholds).
+ */
 export const calculateStatus = (
   value: number,
   min: number,
