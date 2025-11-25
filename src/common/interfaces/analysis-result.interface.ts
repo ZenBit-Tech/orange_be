@@ -1,6 +1,6 @@
 export interface BloodTestSummary {
   overallWellnessScore: number;
-  summary: string;
+  overallSummary: string;
   detailedFindings: string[];
   conclusionStatement: string;
 }
@@ -45,4 +45,24 @@ export interface AiAnalysisResult {
   drugsRecommendations?: RecommendationWrapper;
   exerciseRecommendations?: RecommendationWrapper;
   userQuestionResponse?: UserQuestionResponse;
+  pdfJobId: string;
+}
+
+export enum PdfJobStatusEnum {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export enum ValidationConfidence {
+  LOW = 'low',
+  MEDIUM = 'medium',
+  HIGH = 'high',
+}
+
+export interface PdfJobStatus {
+  status: PdfJobStatusEnum;
+  filename?: string;
+  error?: string;
+  createdAt: Date;
 }
