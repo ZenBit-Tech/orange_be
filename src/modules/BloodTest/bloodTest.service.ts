@@ -42,6 +42,16 @@ export function cleanJsonString(str: string): string {
   return cleaned;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
+}
+
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
@@ -63,7 +73,7 @@ export class BloodTestService {
     testResults: CreateReviewDataDto,
   ): Promise<AiAnalysisResult> {
     try {
-      const prompt = getBloodTestAnalysisPrompt(testResults);
+      const prompt: string = getBloodTestAnalysisPrompt(testResults);
       const completion = await this.openAI.chat.completions.create({
         model: AI_MODEL,
         messages: [{ role: 'user', content: prompt }],
