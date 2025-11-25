@@ -1,7 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import puppeteer from 'puppeteer';
-import * as fs from 'fs';
-import * as path from 'path';
+import { Injectable, Logger } from '@nestjs/common';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 
@@ -16,10 +14,11 @@ interface MarkerInterpretation {
 
 @Injectable()
 export class PdfService {
+  private readonly logger = new Logger(PdfService.name);
+
   async generateHealthReportPdf(
     analysisResult: AiAnalysisResult,
     inputData: CreateReviewDataDto,
-    debug = false,
   ): Promise<Buffer> {
     const reportDate = new Date().toLocaleDateString('en-US', {
       month: '2-digit',
@@ -33,34 +32,34 @@ export class PdfService {
       reportDate,
     );
 
-    if (debug) {
-      const debugDir = path.join(process.cwd(), 'debug');
-      if (!fs.existsSync(debugDir)) {
-        fs.mkdirSync(debugDir);
-      }
-      fs.writeFileSync(path.join(debugDir, `report-${Date.now()}.html`), html);
-    }
-
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    let browser: Browser | null = null;
 
     try {
-      const page = await browser.newPage();
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--disable-gpu',
+        ],
+
+        protocolTimeout: 60000,
+      });
+
+      const page: Page = await browser.newPage();
+
+      await page.setViewport({ width: 794, height: 1123 });
 
       await page.setContent(html, {
-        waitUntil: 'networkidle0',
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
       });
 
-      await page.evaluate(() => {
-        return new Promise((resolve) => {
-          setTimeout(resolve, 2000);
-        });
-      });
-
-      const pdfUint8Array = await page.pdf({
+      const pdfBuffer: Uint8Array = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: {
@@ -70,21 +69,23 @@ export class PdfService {
           left: '20px',
         },
         preferCSSPageSize: true,
+        timeout: 60000,
       });
 
-      const pdfBuffer = Buffer.from(pdfUint8Array);
-
-      if (debug) {
-        const debugDir = path.join(process.cwd(), 'debug');
-        fs.writeFileSync(
-          path.join(debugDir, `report-${Date.now()}.pdf`),
-          pdfBuffer,
-        );
-      }
-
-      return pdfBuffer;
+      return Buffer.from(pdfBuffer);
+    } catch (error) {
+      this.logger.error('PDF generation failed:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`PDF generation failed: ${errorMessage}`);
     } finally {
-      await browser.close();
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (closeError) {
+          this.logger.error('Error closing browser:', closeError);
+        }
+      }
     }
   }
 
@@ -174,7 +175,6 @@ export class PdfService {
 <html>
 <head>
   <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     @page {
       size: A4;
@@ -188,7 +188,7 @@ export class PdfService {
     }
     
     body { 
-      font-family: 'Inter', sans-serif; 
+      font-family: Arial, sans-serif; 
       color: #080B08;
       line-height: 1.6;
       -webkit-print-color-adjust: exact;
@@ -211,10 +211,10 @@ export class PdfService {
       display: flex; 
       justify-content: space-between; 
       align-items: center;
+      padding-top: 20px;
     }
     
     .logo { 
-      font-family: 'Poppins', sans-serif;
       font-size: 24px; 
       font-weight: 700;
       color: #14B8A6;
@@ -227,7 +227,6 @@ export class PdfService {
     
     .page-title { 
       text-align: center;
-      font-family: 'Poppins', sans-serif;
       font-size: 12px;
       font-weight: 500;
       margin-top: 20px;
@@ -258,7 +257,6 @@ export class PdfService {
 
     .wellness-title {
         font-size: 12px;
-        font-family: 'Poppins', sans-serif;
         font-weight: 400;
         margin-bottom: 10px;
     }
@@ -292,7 +290,6 @@ export class PdfService {
         stroke-linecap: round;
         stroke-dasharray: ${circumference};
         stroke-dashoffset: ${offset};
-        transition: stroke-dashoffset 0.5s ease;
     }
 
     .donut-text {
@@ -302,7 +299,6 @@ export class PdfService {
         transform: translate(-50%, -50%);
         font-size: 14px;
         font-weight: 500;
-        font-family: 'Poppins', sans-serif;
         z-index: 10;
     }
 
@@ -489,7 +485,6 @@ export class PdfService {
 
     .section-title {
       font-size: 12px;
-      font-family: 'Poppins', sans-serif;
       font-weight: 400;
       margin: 10px 0 5px 10px;
       color: #1F2937;
@@ -532,7 +527,6 @@ export class PdfService {
       display:flex;
       justify-content:center;
       font-size: 12px;
-      font-family: 'Poppins', sans-serif;
       font-weight: 500;
       margin-top: 25px;
       margin-bottom: 10px;
@@ -546,7 +540,6 @@ export class PdfService {
     
     .question-text {
       font-size: 12px;
-      font-family: 'Poppins', sans-serif;
       font-style: italic;
       color: #1E1E1E;
       margin-bottom: 24px;
@@ -591,11 +584,7 @@ export class PdfService {
 <body>
   <div class="page">
     <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
+      <div class="logo">PlasmAI</div>
       <div class="date">Date of Report: ${reportDate}</div>
     </div>
     
@@ -656,11 +645,7 @@ export class PdfService {
       (markers, index) => `
   <div class="page">
     <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
+      <div class="logo">PlasmAI</div>
       <div class="date">Date of Report: ${reportDate}</div>
     </div>
     
@@ -697,11 +682,7 @@ export class PdfService {
       ? `
   <div class="page">
     <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
+      <div class="logo">PlasmAI</div>
       <div class="date">Date of Report: ${reportDate}</div>
     </div>
     

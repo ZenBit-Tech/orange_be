@@ -146,7 +146,6 @@ export class BloodTestService {
       return await this.pdfService.generateHealthReportPdf(
         analysisResult,
         testResults,
-        false,
       );
     } catch (error) {
       this.logger.error('PDF generation error:', error);
