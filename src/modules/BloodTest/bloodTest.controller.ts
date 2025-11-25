@@ -1,20 +1,8 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Res,
-  Param,
-  UseGuards,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { Response } from 'express';
+import { Body, Controller, Post, Res, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam,
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
@@ -26,12 +14,9 @@ import type {
 } from '@common/interfaces/blood-test-data.interface';
 import { AuthGuard } from '@modules/auth/guards/auth.guard';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
-import {
-  AiAnalysisResult,
-  PdfJobStatus,
-  PdfJobStatusEnum,
-} from '@common/interfaces/analysis-result.interface';
-import { ERROR_MESSAGES, PDF_HEADERS } from '@common/constants';
+import { Response } from 'express';
+import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
+import { PDF_HEADERS } from '@common/constants';
 
 @ApiTags('blood-test')
 @ApiBearerAuth()
@@ -41,7 +26,7 @@ export class BloodTestController {
 
   @UseGuards(AuthGuard)
   @Post('analyze')
-  @ApiOperation({ summary: 'Analyze blood test results and generate report' })
+  @ApiOperation({ summary: 'Analyze blood test results' })
   @ApiBody({ type: CreateReviewDataDto })
   @ApiResponse({
     status: 200,
@@ -52,6 +37,54 @@ export class BloodTestController {
   @ApiResponse({ status: 500, description: 'Internal server error' })
   analyze(@Body() data: CreateReviewDataDto): Promise<AiAnalysisResult> {
     return this.bloodTestService.analyzeBloodTest(data);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('generate-pdf')
+  @ApiOperation({ summary: 'Generate PDF from analysis results' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        testResults: { type: 'object' },
+        analysisResult: { type: 'object' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF generated successfully',
+    content: {
+      'application/pdf': {
+        schema: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async generatePdf(
+    @Body()
+    body: {
+      testResults: CreateReviewDataDto;
+      analysisResult: AiAnalysisResult;
+    },
+    @Res() res: Response,
+  ): Promise<void> {
+    const pdf = await this.bloodTestService.generatePdf(
+      body.testResults,
+      body.analysisResult,
+    );
+
+    res.set({
+      'Content-Type': PDF_HEADERS.CONTENT_TYPE,
+      'Content-Disposition': `attachment; filename=${PDF_HEADERS.FILENAME}`,
+      'Content-Length': pdf.length,
+    });
+
+    res.end(pdf);
   }
 
   @UseGuards(AuthGuard)
@@ -66,82 +99,5 @@ export class BloodTestController {
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   isValid(@Body() data: BloodTestData): Promise<BloodTestValidation> {
     return this.bloodTestService.validateBloodTest(data);
-  }
-
-  @UseGuards(AuthGuard)
-  @Get('pdf-status/:jobId')
-  @ApiOperation({ summary: 'Check PDF generation status' })
-  @ApiParam({
-    name: 'jobId',
-    description: 'Unique job ID returned from analyze endpoint',
-    example: 'pdf_1234567890_abc123def',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'PDF job status retrieved',
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 404, description: 'PDF job not found' })
-  getPdfStatus(@Param('jobId') jobId: string): PdfJobStatus {
-    const status = this.bloodTestService.getPdfJobStatus(jobId);
-
-    if (!status) {
-      throw new NotFoundException(ERROR_MESSAGES.PDF_JOB_NOT_FOUND);
-    }
-
-    return status;
-  }
-
-  @UseGuards(AuthGuard)
-  @Get('download-pdf/:jobId')
-  @ApiOperation({ summary: 'Download generated PDF report' })
-  @ApiParam({
-    name: 'jobId',
-    description: 'Unique job ID returned from analyze endpoint',
-    example: 'pdf_1234567890_abc123def',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'PDF file downloaded successfully',
-  })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({
-    status: 400,
-    description: 'PDF still generating or generation failed',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'PDF job not found or PDF file expired',
-  })
-  downloadPdf(@Param('jobId') jobId: string, @Res() res: Response): void {
-    const status = this.bloodTestService.getPdfJobStatus(jobId);
-
-    if (!status) {
-      throw new NotFoundException(ERROR_MESSAGES.PDF_JOB_NOT_FOUND);
-    }
-
-    if (status.status === PdfJobStatusEnum.PENDING) {
-      throw new BadRequestException(ERROR_MESSAGES.PDF_STILL_GENERATING);
-    }
-
-    if (status.status === PdfJobStatusEnum.FAILED) {
-      throw new BadRequestException(
-        `${ERROR_MESSAGES.PDF_GENERATION_FAILED}: ${status.error}`,
-      );
-    }
-
-    const pdf = this.bloodTestService.getPdfByJobId(jobId);
-
-    if (!pdf) {
-      throw new NotFoundException(ERROR_MESSAGES.PDF_NOT_FOUND_OR_EXPIRED);
-    }
-
-    res.set({
-      'Content-Type': PDF_HEADERS.CONTENT_TYPE,
-      'Content-Disposition': `attachment; filename=${PDF_HEADERS.FILENAME}`,
-      'Content-Length': pdf.length,
-    });
-
-    res.end(pdf);
   }
 }

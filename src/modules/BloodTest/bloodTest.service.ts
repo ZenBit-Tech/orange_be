@@ -7,15 +7,10 @@ import {
   AI_MODEL,
   AI_TEMPERATURE,
   MAX_VALIDATION_TOKENS,
-  PDF_EXPIRY_MS,
-  JOB_ID_PATTERN,
-  PdfCacheEntry,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import {
   AiAnalysisResult,
-  PdfJobStatus,
-  PdfJobStatusEnum,
   ValidationConfidence,
 } from '@common/interfaces/analysis-result.interface';
 import { PdfService } from './pdf.service';
@@ -69,19 +64,11 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly pdfCache: Map<string, PdfCacheEntry> = new Map();
 
   constructor(
     private readonly openAI: OpenAI,
     private readonly pdfService: PdfService,
-  ) {
-    setInterval(
-      () => {
-        this.cleanupExpiredPdfs();
-      },
-      5 * 60 * 1000,
-    );
-  }
+  ) {}
 
   async analyzeBloodTest(
     testResults: CreateReviewDataDto,
@@ -142,20 +129,7 @@ export class BloodTestService {
         markersInterpretations: allMarkersInterpretations,
       };
 
-      const pdfJobId = this.generateJobId();
-
-      this.pdfCache.set(pdfJobId, {
-        buffer: Buffer.from([]),
-        status: PdfJobStatusEnum.PENDING,
-        createdAt: new Date(),
-      });
-
-      this.generatePdfInBackground(testResults, finalResult, pdfJobId);
-
-      return {
-        ...finalResult,
-        pdfJobId,
-      };
+      return finalResult;
     } catch (error) {
       const err = error as Error;
       this.logger.error('Blood test analysis error:', getErrorMessage(err));
@@ -163,121 +137,20 @@ export class BloodTestService {
     }
   }
 
-  private generateJobId(): string {
-    return `pdf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
-
-  private validateJobId(jobId: string): boolean {
-    const pattern: RegExp = JOB_ID_PATTERN;
-    return pattern.test(jobId);
-  }
-
-  private generatePdfInBackground(
-    data: CreateReviewDataDto,
+  async generatePdf(
+    testResults: CreateReviewDataDto,
     analysisResult: AiAnalysisResult,
-    jobId: string,
-  ): void {
-    setImmediate(() => {
-      (async () => {
-        try {
-          const pdfBuffer = await this.pdfService.generateHealthReportPdf(
-            analysisResult,
-            data,
-            false,
-          );
-
-          this.pdfCache.set(jobId, {
-            buffer: pdfBuffer,
-            status: PdfJobStatusEnum.COMPLETED,
-            createdAt: new Date(),
-          });
-
-          this.logger.log(`PDF generated successfully for job: ${jobId}`);
-
-          const expiryTime: number = PDF_EXPIRY_MS;
-          setTimeout(() => {
-            this.deletePdf(jobId);
-          }, expiryTime);
-        } catch (error) {
-          this.logger.error('Background PDF generation failed:', error);
-
-          this.pdfCache.set(jobId, {
-            buffer: Buffer.from([]),
-            status: PdfJobStatusEnum.FAILED,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            createdAt: new Date(),
-          });
-        }
-      })().catch((err) => {
-        this.logger.error('Unhandled error in PDF generation:', err);
-      });
-    });
-  }
-
-  getPdfJobStatus(jobId: string): PdfJobStatus | null {
-    if (!this.validateJobId(jobId)) {
-      this.logger.warn(`Invalid job ID format: ${jobId}`);
-      return null;
-    }
-
-    const entry = this.pdfCache.get(jobId);
-    if (!entry) {
-      return null;
-    }
-
-    return {
-      status: entry.status,
-      createdAt: entry.createdAt,
-      error: entry.error,
-    };
-  }
-
-  getPdfByJobId(jobId: string): Buffer | null {
-    if (!this.validateJobId(jobId)) {
-      this.logger.warn(`Invalid job ID format: ${jobId}`);
-      return null;
-    }
-
-    const entry = this.pdfCache.get(jobId);
-
-    if (!entry || entry.status !== PdfJobStatusEnum.COMPLETED) {
-      return null;
-    }
-
-    return entry.buffer;
-  }
-
-  private deletePdf(jobId: string): void {
+  ): Promise<Buffer> {
     try {
-      const deleted = this.pdfCache.delete(jobId);
-      if (deleted) {
-        this.logger.log(`PDF removed from memory: ${jobId}`);
-      }
-    } catch (error) {
-      this.logger.error(`Error deleting PDF for job ${jobId}:`, error);
-    }
-  }
-
-  private cleanupExpiredPdfs(): void {
-    const now = Date.now();
-    const expiredJobs: string[] = [];
-    const expiryMs: number = PDF_EXPIRY_MS;
-
-    this.pdfCache.forEach((entry, jobId) => {
-      const age = now - entry.createdAt.getTime();
-      if (age > expiryMs) {
-        expiredJobs.push(jobId);
-      }
-    });
-
-    expiredJobs.forEach((jobId) => {
-      this.deletePdf(jobId);
-    });
-
-    if (expiredJobs.length > 0) {
-      this.logger.log(
-        `Cleaned up ${expiredJobs.length} expired PDFs from memory`,
+      this.logger.log('Generating PDF on-demand');
+      return await this.pdfService.generateHealthReportPdf(
+        analysisResult,
+        testResults,
+        false,
       );
+    } catch (error) {
+      this.logger.error('PDF generation error:', error);
+      throw error;
     }
   }
 
