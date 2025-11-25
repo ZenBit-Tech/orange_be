@@ -1,4 +1,4 @@
-import { MarkerData } from '@common/interfaces/review-analysis-data.inerface';
+import { MarkerData } from '@common/interfaces/review-analysis-data.interface';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsNotEmpty,
