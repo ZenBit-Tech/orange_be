@@ -3,7 +3,6 @@ import OpenAI from 'openai';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BloodTestValidation } from '@common/interfaces/blood-test-data.interface';
 import {
-  getBloodTestAnalysisPrompt,
   getValidationPrompt,
   AI_MODEL,
   AI_TEMPERATURE,
@@ -13,6 +12,7 @@ import {
   JOB_ID_PATTERN,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
+import { getBloodTestAnalysisPrompt } from '@prompts/getBloodTestAnalysis';
 import {
   AiAnalysisResult,
   PdfJobStatus,
@@ -108,9 +108,7 @@ export class BloodTestService {
         pdfJobId,
       };
     } catch (error) {
-      this.logger.error('AI Analysis Failed:', error);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage = getErrorMessage(error);
       throw new Error(`AI Analysis Failed: ${errorMessage}`);
     }
   }
