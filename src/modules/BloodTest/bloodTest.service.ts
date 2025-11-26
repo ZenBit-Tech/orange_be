@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import OpenAI from 'openai';
+import { LRUCache } from 'lru-cache';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BloodTestValidation } from '@common/interfaces/blood-test-data.interface';
 import {
@@ -8,7 +9,6 @@ import {
   AI_TEMPERATURE,
   MAX_VALIDATION_TOKENS,
   PDF_DIR_NAME,
-  PDF_EXPIRY_MS,
   JOB_ID_PATTERN,
 } from '@common/constants';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
@@ -71,17 +71,26 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly pdfJobs: Map<string, PdfJobStatus> = new Map();
+  private readonly pdfJobs: LRUCache<string, PdfJobStatus>;
+  private readonly downloadedPdfs: Set<string>;
 
   constructor(
     private readonly openAI: OpenAI,
     private readonly pdfService: PdfService,
   ) {
+    this.pdfJobs = new LRUCache({
+      max: 100,
+      ttl: 1000 * 60 * 15,
+      updateAgeOnGet: false,
+    });
+
+    this.downloadedPdfs = new Set();
+
     setInterval(
       () => {
         this.cleanupExpiredPdfs();
       },
-      5 * 60 * 1000,
+      2 * 60 * 1000,
     );
   }
 
@@ -127,6 +136,10 @@ export class BloodTestService {
       const allMarkersInterpretations: AiAnalysisResult['markersInterpretations'] =
         [];
 
+      if (global.gc) {
+        global.gc();
+      }
+
       for (const response of chunksResponses) {
         const chunkRaw = response.choices[0]?.message?.content || '{}';
 
@@ -150,6 +163,7 @@ export class BloodTestService {
         status: PdfJobStatusEnum.PENDING,
         createdAt: new Date(),
       });
+
       this.generatePdfInBackground(testResults, finalResult, pdfJobId);
 
       return {
@@ -158,7 +172,7 @@ export class BloodTestService {
       };
     } catch (error) {
       const err = error as Error;
-      getErrorMessage(err);
+      throw new Error(getErrorMessage(err));
     }
   }
 
@@ -201,10 +215,9 @@ export class BloodTestService {
 
           this.logger.log(`PDF generated successfully: ${filename}`);
 
-          const expiryTime: number = PDF_EXPIRY_MS;
-          setTimeout(() => {
-            this.deletePdf(jobId);
-          }, expiryTime);
+          if (global.gc) {
+            global.gc();
+          }
         } catch (error) {
           this.logger.error('Background PDF generation failed:', error);
 
@@ -269,7 +282,15 @@ export class BloodTestService {
       }
 
       if (fs.existsSync(filepath)) {
-        return fs.readFileSync(filepath);
+        const buffer = fs.readFileSync(filepath);
+
+        this.downloadedPdfs.add(jobId);
+
+        setTimeout(() => {
+          this.deletePdf(jobId);
+        }, 5000);
+
+        return buffer;
       }
 
       return null;
@@ -303,6 +324,7 @@ export class BloodTestService {
       }
 
       this.pdfJobs.delete(jobId);
+      this.downloadedPdfs.delete(jobId);
     } catch (error) {
       this.logger.error(`Error deleting PDF for job ${jobId}:`, error);
     }
@@ -311,11 +333,12 @@ export class BloodTestService {
   private cleanupExpiredPdfs(): void {
     const now = Date.now();
     const expiredJobs: string[] = [];
-    const expiryMs: number = PDF_EXPIRY_MS;
+    const MAX_AGE_MS = 10 * 60 * 1000;
 
     this.pdfJobs.forEach((job, jobId) => {
       const age = now - job.createdAt.getTime();
-      if (age > expiryMs) {
+
+      if (this.downloadedPdfs.has(jobId) || age > MAX_AGE_MS) {
         expiredJobs.push(jobId);
       }
     });
@@ -325,7 +348,11 @@ export class BloodTestService {
     });
 
     if (expiredJobs.length > 0) {
-      this.logger.log(`Cleaned up ${expiredJobs.length} expired PDFs`);
+      this.logger.log(`Cleaned up ${expiredJobs.length} PDFs`);
+    }
+
+    if (global.gc && expiredJobs.length > 0) {
+      global.gc();
     }
   }
 
