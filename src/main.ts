@@ -58,6 +58,7 @@ async function bootstrap() {
 
   app.use(passport.initialize());
   app.use(passport.session());
+  app.use(compression());
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
@@ -67,6 +68,11 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
+
+  setInterval(() => {
+    const usage = process.memoryUsage();
+    console.log(`Memory: ${Math.round(usage.heapUsed / 1024 / 1024)} MB`);
+  }, 5000);
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`app started on PORT ${process.env.PORT ?? 3000}`);

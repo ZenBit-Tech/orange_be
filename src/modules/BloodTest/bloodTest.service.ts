@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import OpenAI from 'openai';
+import { LRUCache } from 'lru-cache';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { BloodTestValidation } from '@common/interfaces/blood-test-data.interface';
 import {
@@ -71,12 +72,18 @@ function chunkArray<T>(array: T[], size: number): T[][] {
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly pdfJobs: Map<string, PdfJobStatus> = new Map();
+  private readonly pdfJobs: LRUCache<string, PdfJobStatus>;
 
   constructor(
     private readonly openAI: OpenAI,
     private readonly pdfService: PdfService,
   ) {
+    this.pdfJobs = new LRUCache({
+      max: 500,
+      ttl: 1000 * 60 * 60,
+      updateAgeOnGet: true,
+    });
+
     setInterval(
       () => {
         this.cleanupExpiredPdfs();
@@ -126,6 +133,10 @@ export class BloodTestService {
 
       const allMarkersInterpretations: AiAnalysisResult['markersInterpretations'] =
         [];
+
+      if (global.gc) {
+        global.gc();
+      }
 
       for (const response of chunksResponses) {
         const chunkRaw = response.choices[0]?.message?.content || '{}';

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import puppeteer from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 
@@ -21,26 +22,125 @@ export class PdfService {
     inputData: CreateReviewDataDto,
     debug = false,
   ): Promise<Buffer> {
-    const reportDate = new Date().toLocaleDateString('en-US', {
-      month: '2-digit',
-      day: '2-digit',
-      year: 'numeric',
-    });
+    const tempHtmlPath = path.join(os.tmpdir(), `report_${Date.now()}.html`);
 
-    const html = this.generateHtmlTemplate(
-      analysisResult,
-      inputData,
-      reportDate,
-    );
+    try {
+      const writeStream = fs.createWriteStream(tempHtmlPath);
+      await this.writeHtmlInChunks(writeStream, analysisResult, inputData);
 
-    if (debug) {
-      const debugDir = path.join(process.cwd(), 'debug');
-      if (!fs.existsSync(debugDir)) {
-        fs.mkdirSync(debugDir);
+      const pdfBuffer = await this.htmlToPdf(tempHtmlPath, debug);
+
+      fs.unlinkSync(tempHtmlPath);
+
+      return pdfBuffer;
+    } catch (error) {
+      if (fs.existsSync(tempHtmlPath)) {
+        fs.unlinkSync(tempHtmlPath);
       }
-      fs.writeFileSync(path.join(debugDir, `report-${Date.now()}.html`), html);
+      throw error;
     }
+  }
 
+  private async writeHtmlInChunks(
+    writeStream: fs.WriteStream,
+    analysisResult: AiAnalysisResult,
+    inputData: CreateReviewDataDto,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const reportDate = new Date().toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: 'numeric',
+      });
+
+      const wellnessScore =
+        analysisResult.bloodTestSummary.overallWellnessScore;
+      const circumference = 2 * Math.PI * 27;
+      const fixedFillPercentage = 67;
+      const offset =
+        circumference - (fixedFillPercentage / 100) * circumference;
+
+      const getScoreColors = (score: number) => {
+        if (score >= 85) return { from: '#047E56', to: '#32AC84' };
+        if (score >= 65) return { from: '#9BC74B', to: '#FE9901' };
+        return { from: '#FF9509', to: '#FF3B01' };
+      };
+      const colors = getScoreColors(wellnessScore);
+
+      const firstPageMarkers = 12;
+      const subsequentPageMarkers = 16;
+      const totalMarkers = analysisResult.markersInterpretations.length;
+
+      const page1Markers = analysisResult.markersInterpretations.slice(
+        0,
+        Math.min(firstPageMarkers, totalMarkers),
+      );
+      const remainingAfterPage1 =
+        analysisResult.markersInterpretations.slice(firstPageMarkers);
+
+      const markerPages: MarkerInterpretation[][] = [];
+      for (
+        let i = 0;
+        i < remainingAfterPage1.length;
+        i += subsequentPageMarkers
+      ) {
+        markerPages.push(
+          remainingAfterPage1.slice(i, i + subsequentPageMarkers),
+        );
+      }
+
+      const hasRecommendations =
+        (inputData.nutritionAdvice &&
+          analysisResult.nutritionRecommendations) ||
+        (inputData.supplementRecommendations &&
+          analysisResult.supplementsRecommendations) ||
+        (inputData.medicationGuidance && analysisResult.drugsRecommendations) ||
+        (inputData.exerciseGuidelines &&
+          analysisResult.exerciseRecommendations);
+
+      const totalPages = 1 + markerPages.length + (hasRecommendations ? 1 : 0);
+
+      writeStream.on('error', reject);
+      writeStream.on('finish', resolve);
+
+      writeStream.write(this.getHtmlHeader());
+
+      writeStream.write(
+        this.getFirstPage(
+          reportDate,
+          wellnessScore,
+          circumference,
+          offset,
+          colors,
+          analysisResult,
+          page1Markers,
+          totalPages,
+        ),
+      );
+
+      markerPages.forEach((markers, index) => {
+        writeStream.write(
+          this.getMarkerPage(reportDate, markers, index + 2, totalPages),
+        );
+      });
+
+      if (hasRecommendations) {
+        writeStream.write(
+          this.getRecommendationsPage(
+            reportDate,
+            inputData,
+            analysisResult,
+            totalPages,
+          ),
+        );
+      }
+
+      writeStream.write('</body></html>');
+      writeStream.end();
+    });
+  }
+
+  private async htmlToPdf(htmlPath: string, debug: boolean): Promise<Buffer> {
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -49,7 +149,20 @@ export class PdfService {
     try {
       const page = await browser.newPage();
 
-      await page.setContent(html, {
+      const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
+
+      if (debug) {
+        const debugDir = path.join(process.cwd(), 'debug');
+        if (!fs.existsSync(debugDir)) {
+          fs.mkdirSync(debugDir);
+        }
+        fs.writeFileSync(
+          path.join(debugDir, `report-${Date.now()}.html`),
+          htmlContent,
+        );
+      }
+
+      await page.setContent(htmlContent, {
         waitUntil: 'networkidle0',
         timeout: 30000,
       });
@@ -88,89 +201,8 @@ export class PdfService {
     }
   }
 
-  generateHtmlTemplate(
-    analysisResult: AiAnalysisResult,
-    inputData: CreateReviewDataDto,
-    reportDate: string,
-  ): string {
-    const wellnessScore = analysisResult.bloodTestSummary.overallWellnessScore;
-
-    const circumference = 2 * Math.PI * 27;
-    const fixedFillPercentage = 67;
-    const offset = circumference - (fixedFillPercentage / 100) * circumference;
-
-    const getScoreColors = (score: number) => {
-      if (score >= 85) return { from: '#047E56', to: '#32AC84' };
-      if (score >= 65) return { from: '#9BC74B', to: '#FE9901' };
-      return { from: '#FF9509', to: '#FF3B01' };
-    };
-    const colors = getScoreColors(wellnessScore);
-
-    const firstPageMarkers = 12;
-    const subsequentPageMarkers = 16;
-    const totalMarkers = analysisResult.markersInterpretations.length;
-
-    const page1Markers = analysisResult.markersInterpretations.slice(
-      0,
-      Math.min(firstPageMarkers, totalMarkers),
-    );
-    const remainingAfterPage1 =
-      analysisResult.markersInterpretations.slice(firstPageMarkers);
-
-    const markerPages: MarkerInterpretation[][] = [];
-    for (
-      let i = 0;
-      i < remainingAfterPage1.length;
-      i += subsequentPageMarkers
-    ) {
-      markerPages.push(remainingAfterPage1.slice(i, i + subsequentPageMarkers));
-    }
-
-    const hasRecommendations =
-      (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) ||
-      (inputData.supplementRecommendations &&
-        analysisResult.supplementsRecommendations) ||
-      (inputData.medicationGuidance && analysisResult.drugsRecommendations) ||
-      (inputData.exerciseGuidelines && analysisResult.exerciseRecommendations);
-
-    const totalPages = 1 + markerPages.length + (hasRecommendations ? 1 : 0);
-
-    const generateMarkerRows = (markers: MarkerInterpretation[]): string =>
-      markers
-        .map((marker: MarkerInterpretation) => {
-          const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
-          const position = this.calculateMarkerPosition(
-            Number(marker.value),
-            Number(marker.referenceMin),
-            Number(marker.referenceMax),
-          );
-          return `
-            <tr>
-              <td>
-                <div class="marker-name-cell">
-                  <div class="marker-dot ${statusClass}"></div>
-                  <span>${marker.markerName}</span>
-                </div>
-              </td>
-              <td class="marker-value">${marker.value}</td>
-              <td>
-                <div class="range-cell">
-                  <div class="health-bar">
-                    <div class="health-indicator ${statusClass}" style="left: ${position}%">▼</div>
-                  </div>
-                  <div class="range-text">${marker.referenceMin} - ${marker.referenceMax} ${marker.unit}</div>
-                </div>
-              </td>
-              <td>
-                <span class="status-badge ${statusClass}">${marker.status}</span>
-              </td>
-            </tr>
-          `;
-        })
-        .join('');
-
-    return `
-<!DOCTYPE html>
+  private getHtmlHeader(): string {
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -290,8 +322,6 @@ export class PdfService {
         stroke: url(#gradient);
         stroke-width: 8;
         stroke-linecap: round;
-        stroke-dasharray: ${circumference};
-        stroke-dashoffset: ${offset};
         transition: stroke-dashoffset 0.5s ease;
     }
 
@@ -588,7 +618,20 @@ export class PdfService {
     }
   </style>
 </head>
-<body>
+<body>`;
+  }
+
+  private getFirstPage(
+    reportDate: string,
+    wellnessScore: number,
+    circumference: number,
+    offset: number,
+    colors: { from: string; to: string },
+    analysisResult: AiAnalysisResult,
+    page1Markers: MarkerInterpretation[],
+    totalPages: number,
+  ): string {
+    return `
   <div class="page">
     <div class="header">
       <img
@@ -613,7 +656,7 @@ export class PdfService {
               </linearGradient>
             </defs>
             <circle class="donut-bg" cx="35" cy="35" r="27"/>
-            <circle class="donut-progress" cx="35" cy="35" r="27"/>
+            <circle class="donut-progress" cx="35" cy="35" r="27" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
           </svg>
           <div class="donut-text">${wellnessScore}%</div>
         </div>
@@ -638,7 +681,7 @@ export class PdfService {
         </tr>
       </thead>
       <tbody>
-        ${generateMarkerRows(page1Markers)}
+        ${this.generateMarkerRows(page1Markers)}
       </tbody>
     </table>
     
@@ -649,11 +692,16 @@ export class PdfService {
       </div>
       <div class="page-number">Page 1 of ${totalPages}</div>
     </div>
-  </div>
-  
-  ${markerPages
-    .map(
-      (markers, index) => `
+  </div>`;
+  }
+
+  private getMarkerPage(
+    reportDate: string,
+    markers: MarkerInterpretation[],
+    pageNum: number,
+    totalPages: number,
+  ): string {
+    return `
   <div class="page">
     <div class="header">
       <img
@@ -676,7 +724,7 @@ export class PdfService {
         </tr>
       </thead>
       <tbody>
-        ${generateMarkerRows(markers)}
+        ${this.generateMarkerRows(markers)}
       </tbody>
     </table>
     
@@ -685,16 +733,18 @@ export class PdfService {
         Disclaimer: This AI-generated report is for informational purposes only<br>
         and is not medical diagnosis. Please consult a healthcare professional.
       </div>
-      <div class="page-number">Page ${index + 2} of ${totalPages}</div>
+      <div class="page-number">Page ${pageNum} of ${totalPages}</div>
     </div>
-  </div>
-  `,
-    )
-    .join('')}
-  
-  ${
-    hasRecommendations
-      ? `
+  </div>`;
+  }
+
+  private getRecommendationsPage(
+    reportDate: string,
+    inputData: CreateReviewDataDto,
+    analysisResult: AiAnalysisResult,
+    totalPages: number,
+  ): string {
+    return `
   <div class="page">
     <div class="header">
       <img
@@ -783,13 +833,42 @@ export class PdfService {
       </div>
       <div class="page-number">Page ${totalPages} of ${totalPages}</div>
     </div>
-  </div>
-  `
-      : ''
+  </div>`;
   }
-</body>
-</html>
-    `;
+
+  private generateMarkerRows(markers: MarkerInterpretation[]): string {
+    return markers
+      .map((marker: MarkerInterpretation) => {
+        const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
+        const position = this.calculateMarkerPosition(
+          Number(marker.value),
+          Number(marker.referenceMin),
+          Number(marker.referenceMax),
+        );
+        return `
+          <tr>
+            <td>
+              <div class="marker-name-cell">
+                <div class="marker-dot ${statusClass}"></div>
+                <span>${marker.markerName}</span>
+              </div>
+            </td>
+            <td class="marker-value">${marker.value}</td>
+            <td>
+              <div class="range-cell">
+                <div class="health-bar">
+                  <div class="health-indicator ${statusClass}" style="left: ${position}%">▼</div>
+                </div>
+                <div class="range-text">${marker.referenceMin} - ${marker.referenceMax} ${marker.unit}</div>
+              </div>
+            </td>
+            <td>
+              <span class="status-badge ${statusClass}">${marker.status}</span>
+            </td>
+          </tr>
+        `;
+      })
+      .join('');
   }
 
   private calculateMarkerPosition(
