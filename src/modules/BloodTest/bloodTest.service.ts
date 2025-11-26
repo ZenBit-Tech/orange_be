@@ -215,7 +215,6 @@ export class BloodTestService {
 
           this.logger.log(`PDF generated successfully: ${filename}`);
 
-          // Force garbage collection after PDF generation
           if (global.gc) {
             global.gc();
           }
@@ -334,12 +333,11 @@ export class BloodTestService {
   private cleanupExpiredPdfs(): void {
     const now = Date.now();
     const expiredJobs: string[] = [];
-    const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+    const MAX_AGE_MS = 10 * 60 * 1000;
 
     this.pdfJobs.forEach((job, jobId) => {
       const age = now - job.createdAt.getTime();
 
-      // Delete immediately if already downloaded, or after 10 minutes
       if (this.downloadedPdfs.has(jobId) || age > MAX_AGE_MS) {
         expiredJobs.push(jobId);
       }
@@ -353,7 +351,6 @@ export class BloodTestService {
       this.logger.log(`Cleaned up ${expiredJobs.length} PDFs`);
     }
 
-    // Force garbage collection after cleanup
     if (global.gc && expiredJobs.length > 0) {
       global.gc();
     }
