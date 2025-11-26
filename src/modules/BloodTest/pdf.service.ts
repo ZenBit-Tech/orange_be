@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import puppeteer from 'puppeteer';
+import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import axios from 'axios';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 
@@ -17,858 +17,952 @@ interface MarkerInterpretation {
 
 @Injectable()
 export class PdfService {
+  private readonly LOGO_URL =
+    'https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png';
+  private readonly PAGE_WIDTH = 595.28; // A4 width in points
+  private readonly PAGE_HEIGHT = 841.89; // A4 height in points
+  private readonly MARGIN = 40;
+  private readonly CONTENT_WIDTH = this.PAGE_WIDTH - this.MARGIN * 2;
+
   async generateHealthReportPdf(
     analysisResult: AiAnalysisResult,
     inputData: CreateReviewDataDto,
     debug = false,
   ): Promise<Buffer> {
-    const tempHtmlPath = path.join(os.tmpdir(), `report_${Date.now()}.html`);
-
+    // Download logo first (outside Promise constructor)
+    let logoBuffer: Buffer | null = null;
     try {
-      const writeStream = fs.createWriteStream(tempHtmlPath);
-      await this.writeHtmlInChunks(writeStream, analysisResult, inputData);
-
-      const pdfBuffer = await this.htmlToPdf(tempHtmlPath, debug);
-
-      fs.unlinkSync(tempHtmlPath);
-
-      return pdfBuffer;
-    } catch (error) {
-      if (fs.existsSync(tempHtmlPath)) {
-        fs.unlinkSync(tempHtmlPath);
-      }
-      throw error;
-    }
-  }
-
-  private async writeHtmlInChunks(
-    writeStream: fs.WriteStream,
-    analysisResult: AiAnalysisResult,
-    inputData: CreateReviewDataDto,
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const reportDate = new Date().toLocaleDateString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
+      const response = await axios.get<ArrayBuffer>(this.LOGO_URL, {
+        responseType: 'arraybuffer',
       });
+      logoBuffer = Buffer.from(response.data);
+    } catch (error) {
+      console.warn('Failed to load logo:', error);
+    }
 
-      const wellnessScore =
-        analysisResult.bloodTestSummary.overallWellnessScore;
-      const circumference = 2 * Math.PI * 27;
-      const fixedFillPercentage = 67;
-      const offset =
-        circumference - (fixedFillPercentage / 100) * circumference;
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margins: {
+            top: this.MARGIN,
+            bottom: this.MARGIN,
+            left: this.MARGIN,
+            right: this.MARGIN,
+          },
+          bufferPages: true,
+        });
 
-      const getScoreColors = (score: number) => {
-        if (score >= 85) return { from: '#047E56', to: '#32AC84' };
-        if (score >= 65) return { from: '#9BC74B', to: '#FE9901' };
-        return { from: '#FF9509', to: '#FF3B01' };
-      };
-      const colors = getScoreColors(wellnessScore);
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => {
+          const pdfBuffer = Buffer.concat(chunks);
+          if (debug) {
+            const debugDir = path.join(process.cwd(), 'debug');
+            if (!fs.existsSync(debugDir)) {
+              fs.mkdirSync(debugDir);
+            }
+            fs.writeFileSync(
+              path.join(debugDir, `report-${Date.now()}.pdf`),
+              pdfBuffer,
+            );
+          }
+          resolve(pdfBuffer);
+        });
+        doc.on('error', (err: Error) => reject(err));
 
-      const firstPageMarkers = 12;
-      const subsequentPageMarkers = 16;
-      const totalMarkers = analysisResult.markersInterpretations.length;
+        const reportDate = new Date().toLocaleDateString('en-US', {
+          month: '2-digit',
+          day: '2-digit',
+          year: 'numeric',
+        });
 
-      const page1Markers = analysisResult.markersInterpretations.slice(
-        0,
-        Math.min(firstPageMarkers, totalMarkers),
-      );
-      const remainingAfterPage1 =
-        analysisResult.markersInterpretations.slice(firstPageMarkers);
+        // Pagination setup
+        const firstPageMarkers = 12;
+        const subsequentPageMarkers = 16;
+        const totalMarkers = analysisResult.markersInterpretations.length;
 
-      const markerPages: MarkerInterpretation[][] = [];
-      for (
-        let i = 0;
-        i < remainingAfterPage1.length;
-        i += subsequentPageMarkers
-      ) {
-        markerPages.push(
-          remainingAfterPage1.slice(i, i + subsequentPageMarkers),
+        const page1Markers = analysisResult.markersInterpretations.slice(
+          0,
+          Math.min(firstPageMarkers, totalMarkers),
         );
-      }
+        const remainingAfterPage1 =
+          analysisResult.markersInterpretations.slice(firstPageMarkers);
 
-      const hasRecommendations =
-        (inputData.nutritionAdvice &&
-          analysisResult.nutritionRecommendations) ||
-        (inputData.supplementRecommendations &&
-          analysisResult.supplementsRecommendations) ||
-        (inputData.medicationGuidance && analysisResult.drugsRecommendations) ||
-        (inputData.exerciseGuidelines &&
-          analysisResult.exerciseRecommendations);
+        const markerPages: MarkerInterpretation[][] = [];
+        for (
+          let i = 0;
+          i < remainingAfterPage1.length;
+          i += subsequentPageMarkers
+        ) {
+          markerPages.push(
+            remainingAfterPage1.slice(i, i + subsequentPageMarkers),
+          );
+        }
 
-      const totalPages = 1 + markerPages.length + (hasRecommendations ? 1 : 0);
+        const hasRecommendations =
+          (inputData.nutritionAdvice &&
+            analysisResult.nutritionRecommendations) ||
+          (inputData.supplementRecommendations &&
+            analysisResult.supplementsRecommendations) ||
+          (inputData.medicationGuidance &&
+            analysisResult.drugsRecommendations) ||
+          (inputData.exerciseGuidelines &&
+            analysisResult.exerciseRecommendations);
 
-      writeStream.on('error', reject);
-      writeStream.on('finish', resolve);
+        const totalPages =
+          1 + markerPages.length + (hasRecommendations ? 1 : 0);
 
-      writeStream.write(this.getHtmlHeader());
-
-      writeStream.write(
-        this.getFirstPage(
+        // Page 1: Summary
+        this.drawFirstPage(
+          doc,
+          logoBuffer,
           reportDate,
-          wellnessScore,
-          circumference,
-          offset,
-          colors,
           analysisResult,
           page1Markers,
+          1,
           totalPages,
-        ),
-      );
-
-      markerPages.forEach((markers, index) => {
-        writeStream.write(
-          this.getMarkerPage(reportDate, markers, index + 2, totalPages),
         );
-      });
 
-      if (hasRecommendations) {
-        writeStream.write(
-          this.getRecommendationsPage(
+        // Marker continuation pages
+        markerPages.forEach((markers, index) => {
+          doc.addPage();
+          this.drawMarkerPage(
+            doc,
+            logoBuffer,
+            reportDate,
+            markers,
+            index + 2,
+            totalPages,
+          );
+        });
+
+        // Recommendations page
+        if (hasRecommendations) {
+          doc.addPage();
+          this.drawRecommendationsPage(
+            doc,
+            logoBuffer,
             reportDate,
             inputData,
             analysisResult,
             totalPages,
-          ),
-        );
-      }
-
-      writeStream.write('</body></html>');
-      writeStream.end();
-    });
-  }
-
-  private async htmlToPdf(htmlPath: string, debug: boolean): Promise<Buffer> {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-
-    try {
-      const page = await browser.newPage();
-
-      const htmlContent = fs.readFileSync(htmlPath, 'utf-8');
-
-      if (debug) {
-        const debugDir = path.join(process.cwd(), 'debug');
-        if (!fs.existsSync(debugDir)) {
-          fs.mkdirSync(debugDir);
+          );
         }
-        fs.writeFileSync(
-          path.join(debugDir, `report-${Date.now()}.html`),
-          htmlContent,
-        );
+
+        doc.end();
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
-
-      await page.setContent(htmlContent, {
-        waitUntil: 'networkidle0',
-        timeout: 30000,
-      });
-
-      await page.evaluate(() => {
-        return new Promise((resolve) => {
-          setTimeout(resolve, 2000);
-        });
-      });
-
-      const pdfUint8Array = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20px',
-          right: '20px',
-          bottom: '20px',
-          left: '20px',
-        },
-        preferCSSPageSize: true,
-      });
-
-      const pdfBuffer = Buffer.from(pdfUint8Array);
-
-      if (debug) {
-        const debugDir = path.join(process.cwd(), 'debug');
-        fs.writeFileSync(
-          path.join(debugDir, `report-${Date.now()}.pdf`),
-          pdfBuffer,
-        );
-      }
-
-      return pdfBuffer;
-    } finally {
-      await browser.close();
-    }
+    });
   }
 
-  private getHtmlHeader(): string {
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
-  <style>
-    @page {
-      size: A4;
-      margin: 0;
-    }
-    
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-    }
-    
-    body { 
-      font-family: 'Inter', sans-serif; 
-      color: #080B08;
-      line-height: 1.6;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    
-    .page { 
-      width: 210mm;
-      min-height: 297mm;
-      padding: 0 20px 80px 20px;
-      page-break-after: always;
-      position: relative;
-    }
-
-    .page:last-child {
-      page-break-after: auto;
-    }
-    
-    .header { 
-      display: flex; 
-      justify-content: space-between; 
-      align-items: center;
-    }
-    
-    .logo { 
-      font-family: 'Poppins', sans-serif;
-      font-size: 24px; 
-      font-weight: 700;
-      color: #14B8A6;
-    }
-    
-    .date { 
-      font-size: 12px; 
-      color: #525252;
-    }
-    
-    .page-title { 
-      text-align: center;
-      font-family: 'Poppins', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
-      margin-top: 20px;
-      margin-bottom:5px;
-    }
-    
-    .summary-wrapper {
-      display: flex;
-      align-items:center;
-      gap: 10px;
-      margin: 0px 0 40px 0;
-      border-radius: 20px;
-    }
-    
-    .wellness-box {
-        display: flex;
-        flex-direction: column;
-        flex-shrink: 0;
-        width: 165px;
-        align-items: center; 
-        justify-content: center; 
-        padding: 40px 12px;
-        background: white;
-        border: 1px solid #E5E7EB;
-        border-radius: 20px;
-        text-align: center;
-    }
-
-    .wellness-title {
-        font-size: 12px;
-        font-family: 'Poppins', sans-serif;
-        font-weight: 400;
-        margin-bottom: 10px;
-    }
-
-    .donut-chart {
-        position: relative;
-        width: 70px;
-        height: 70px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .donut-chart svg {
-        transform: rotate(-90deg);
-        position: absolute;
-        top: 0;
-        left: 0;
-    }
-
-    .donut-bg {
-        fill: transparent;
-        stroke: transparent;
-        stroke-width: 8;
-    }
-
-    .donut-progress {
-        fill: none;
-        stroke: url(#gradient);
-        stroke-width: 8;
-        stroke-linecap: round;
-        transition: stroke-dashoffset 0.5s ease;
-    }
-
-    .donut-text {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px;
-        font-weight: 500;
-        font-family: 'Poppins', sans-serif;
-        z-index: 10;
-    }
-
-    .summary-content {
-      flex: 1;
-    }
-    
-    .summary-content p {
-      font-size: 10.5px;
-      color: #1E1E1E;
-      margin-bottom: 10px;
-      line-height: 14px;
-    }
-    
-    .summary-content ul {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 10px;
-    }
-    
-    .summary-content li {
-      font-size: 10.5px;
-      color: #1E1E1E;
-      padding-left: 15px;
-      position: relative;
-      line-height: 14px;
-    }
-    
-    .summary-content li:before {
-      content: "•";
-      position: absolute;
-      left: 5px;
-      font-weight: 700;
-      font-size: 12px;
-      color: #1E1E1E;
-    }
-    
-    .conclusion {
-      font-size: 10.5px;
-      color: #1E1E1E;
-      line-height: 1.6;
-    }
-    
-    .markers-table {
-      width: 100%;
-      border-collapse: separate;
-      border-spacing: 0;
-      border: 1px solid #DCDCDC;
-      border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 30px;
-    }
-
-    .markers-table thead {
-      height: 32px;
-      background: #FDFDFD;
-      border-bottom: 1px solid #DCDCDC;
-    }
-
-    .markers-table th {
-      padding: 12px;
-      text-align: left;
-      font-weight: 500;
-      font-size: 12px;
-      border-bottom: 1px solid #DCDCDC;
-    }
-
-    .markers-table th:nth-child(1) { width: 30%; }
-    .markers-table th:nth-child(2) { width: 10%; }
-    .markers-table th:nth-child(3) { width: 42%; }
-    .markers-table th:nth-child(4) { width: 18%; }
-
-    .markers-table td {
-      padding: 16px 12px;
-      font-size: 12px;
-      vertical-align: middle;
-    }
-
-    .markers-table tbody tr {
-      page-break-inside: avoid;
-    }
-    
-    .marker-name-cell {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .marker-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    
-    .marker-dot.normal { background: #10B981; }
-    .marker-dot.slightly-high,
-    .marker-dot.slightly-low { background: #F59E0B; }
-    .marker-dot.high,
-    .marker-dot.low,
-    .marker-dot.critical { background: #EF4444; }
-    
-    .marker-value {
-      font-weight: 400;
-    }
-    
-    .range-cell {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    
-    .health-bar {
-      margin-right:30px;
-      position: relative;
-      width: 120px;
-      height: 8px;
-      background: linear-gradient(to right, 
-        #EF4444 0% 20%,
-        #F59E0B 20% 30%,
-        #10B981 30% 70%,
-        #F59E0B 70% 80%,
-        #EF4444 80% 100%
-      );
-      border-radius: 12px;
-    }
-    
-    .health-indicator {
-      position: absolute;
-      top: -12px;
-      transform: translateX(-50%);
-      font-size: 14px;
-      line-height: 1;
-    }
-    
-    .health-indicator.normal { color: #10B981; }
-    .health-indicator.slightly-high,
-    .health-indicator.slightly-low { color: #F59E0B; }
-    .health-indicator.high,
-    .health-indicator.low,
-    .health-indicator.critical { color: #EF4444; }
-    
-    .range-text {
-      font-size: 12px;
-    }
-    
-    .status-badge {
-      width:90px;
-      display: inline-block;
-      border-radius: 4px;
-      font-size: 10.5px;
-      font-weight: 400;
-      text-align: center;
-    }
-    
-    .status-badge.normal {
-      background: #D1FAE5;
-      color: #065F46;
-      border: 1px solid #A7F3D0;
-    }
-    
-    .status-badge.slightly-high,
-    .status-badge.slightly-low {
-      background: #FEF3C7;
-      color: #92400E;
-      border: 1px solid #FDE68A;
-    }
-    
-    .status-badge.high,
-    .status-badge.low,
-    .status-badge.critical {
-      background: #FEE2E2;
-      color: #991B1B;
-      border: 1px solid #FECACA;
-    }
-
-    .advice-block {
-      border-top: 1px solid #DCDCDC;
-    }
-
-    .wrapper-recommendations{
-      border-bottom: 1px solid #DCDCDC;
-    }
-
-    .section-title {
-      font-size: 12px;
-      font-family: 'Poppins', sans-serif;
-      font-weight: 400;
-      margin: 10px 0 5px 10px;
-      color: #1F2937;
-    }
-    
-    .recommendation-list {
-      list-style: none;
-      margin-left: 20px;
-      padding: 0;
-      margin-bottom: 16px;
-    }
-    
-    .recommendation-list li {
-      font-size: 10.5px;
-      color: #1F2937;
-      padding-left: 12px;
-      position: relative;
-      line-height: 1.6;
-    }
-    
-    .recommendation-list li:before {
-      content: "•";
-      position: absolute;
-      left: 0;
-      top: -2px;
-      font-weight: 700;
-      font-size: 12px;
-    }
-    
-    .question-answer-box {
-      margin-bottom: 12px;
-      padding: 16px;
-      background: #FDFDFD;
-      border: 1px solid #DCDCDC;
-      border-left: 4px solid #14B8A6;
-      border-radius: 4px 12px 12px 4px;
-    }
-    
-    .question-answer-title {
-      display:flex;
-      justify-content:center;
-      font-size: 12px;
-      font-family: 'Poppins', sans-serif;
-      font-weight: 500;
-      margin-top: 25px;
-      margin-bottom: 10px;
-    }
-    
-    .question-label {
-      font-size: 12px;
-      color: #525252;
-      margin-bottom: 8px;
-    }
-    
-    .question-text {
-      font-size: 12px;
-      font-family: 'Poppins', sans-serif;
-      font-style: italic;
-      color: #1E1E1E;
-      margin-bottom: 24px;
-      line-height: 1.6;
-    }
-    
-    .answer-text {
-      font-size: 12px;
-      color: #1E1E1E;
-      line-height: 1.6;
-    }
-    
-    .footer {
-      position: absolute;
-      bottom: 20px; 
-      left: 20px;
-      right: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 20px;
-    }
-    
-    .disclaimer {
-      font-size: 10.5px;
-      color: #525252;
-      line-height: 1.4;
-      max-width: 70%;
-    }
-    
-    .page-number {
-      font-size: 10.5px;
-      color: #525252;
-    }
-    
-    .markers-table-continuation {
-      border-radius: 0 0 12px 12px;
-      margin-top: 0;
-    }
-  </style>
-</head>
-<body>`;
-  }
-
-  private getFirstPage(
+  private drawHeader(
+    doc: PDFKit.PDFDocument,
+    logoBuffer: Buffer | null,
     reportDate: string,
-    wellnessScore: number,
-    circumference: number,
-    offset: number,
-    colors: { from: string; to: string },
+    y: number,
+  ) {
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, this.MARGIN, y, { width: 80 });
+      } catch (error) {
+        console.warn('Failed to embed logo:', error);
+      }
+    }
+
+    doc
+      .fontSize(9)
+      .fillColor('#525252')
+      .text(
+        `Date of Report: ${reportDate}`,
+        this.PAGE_WIDTH - this.MARGIN - 120,
+        y + 5,
+        {
+          width: 120,
+          align: 'right',
+        },
+      );
+  }
+
+  private drawFooter(
+    doc: PDFKit.PDFDocument,
+    pageNum: number,
+    totalPages: number,
+  ) {
+    const footerY = this.PAGE_HEIGHT - this.MARGIN - 30;
+
+    doc
+      .fontSize(8)
+      .fillColor('#525252')
+      .text(
+        'Disclaimer: This AI-generated report is for informational purposes only\nand is not medical diagnosis. Please consult a healthcare professional.',
+        this.MARGIN,
+        footerY,
+        { width: this.CONTENT_WIDTH * 0.7, align: 'left', lineGap: 2 },
+      );
+
+    doc
+      .fontSize(8)
+      .fillColor('#525252')
+      .text(
+        `Page ${pageNum} of ${totalPages}`,
+        this.PAGE_WIDTH - this.MARGIN - 80,
+        footerY,
+        {
+          width: 80,
+          align: 'right',
+        },
+      );
+  }
+
+  private drawFirstPage(
+    doc: PDFKit.PDFDocument,
+    logoBuffer: Buffer | null,
+    reportDate: string,
     analysisResult: AiAnalysisResult,
     page1Markers: MarkerInterpretation[],
+    pageNum: number,
     totalPages: number,
-  ): string {
-    return `
-  <div class="page">
-    <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
-      <div class="date">Date of Report: ${reportDate}</div>
-    </div>
-    
-    <h1 class="page-title">Your blood test summary</h1>
-    
-    <div class="summary-wrapper">
-      <div class="wellness-box">
-        <div class="wellness-title">Overall wellness score</div>
-        <div class="donut-chart">
-          <svg width="70" height="70" viewBox="0 0 70 70">
-            <defs>
-              <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:${colors.to};stop-opacity:1"/>
-                <stop offset="67%" style="stop-color:${colors.from};stop-opacity:1"/>
-              </linearGradient>
-            </defs>
-            <circle class="donut-bg" cx="35" cy="35" r="27"/>
-            <circle class="donut-progress" cx="35" cy="35" r="27" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
-          </svg>
-          <div class="donut-text">${wellnessScore}%</div>
-        </div>
-      </div>
-      
-      <div class="summary-content">
-        <p>${analysisResult.bloodTestSummary.overallSummary}</p>
-        <ul>
-          ${analysisResult.bloodTestSummary.detailedFindings.map((finding) => `<li>${finding}</li>`).join('')}
-        </ul>
-        <div class="conclusion">${analysisResult.bloodTestSummary.conclusionStatement}</div>
-      </div>
-    </div>
-    
-    <table class="markers-table">
-      <thead>
-        <tr>
-          <th>Marker</th>
-          <th>Value</th>
-          <th>Normal Range</th>
-          <th>Interpretation</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${this.generateMarkerRows(page1Markers)}
-      </tbody>
-    </table>
-    
-    <div class="footer">
-      <div class="disclaimer">
-        Disclaimer: This AI-generated report is for informational purposes only<br>
-        and is not medical diagnosis. Please consult a healthcare professional.
-      </div>
-      <div class="page-number">Page 1 of ${totalPages}</div>
-    </div>
-  </div>`;
+  ) {
+    let currentY = this.MARGIN;
+
+    // Header
+    this.drawHeader(doc, logoBuffer, reportDate, currentY);
+    currentY += 50;
+
+    // Page Title
+    doc
+      .fontSize(10)
+      .fillColor('#080B08')
+      .font('Helvetica-Bold')
+      .text('Your blood test summary', this.MARGIN, currentY, {
+        width: this.CONTENT_WIDTH,
+        align: 'center',
+      });
+    currentY += 25;
+
+    // Wellness Score Box and Summary
+    const wellnessScore = analysisResult.bloodTestSummary.overallWellnessScore;
+    const boxWidth = 140;
+    const boxHeight = 140;
+    const boxX = this.MARGIN;
+    const summaryX = boxX + boxWidth + 15;
+
+    // Draw wellness box with border
+    doc
+      .roundedRect(boxX, currentY, boxWidth, boxHeight, 10)
+      .lineWidth(1)
+      .strokeColor('#E5E7EB')
+      .fillColor('#FFFFFF')
+      .fillAndStroke();
+
+    // Wellness title
+    doc
+      .fontSize(9)
+      .fillColor('#080B08')
+      .font('Helvetica')
+      .text('Overall wellness score', boxX, currentY + 15, {
+        width: boxWidth,
+        align: 'center',
+      });
+
+    // Draw donut chart
+    this.drawDonutChart(doc, boxX + boxWidth / 2, currentY + 75, wellnessScore);
+
+    // Score text
+    doc
+      .fontSize(12)
+      .fillColor('#080B08')
+      .font('Helvetica-Bold')
+      .text(`${wellnessScore}%`, boxX, currentY + 68, {
+        width: boxWidth,
+        align: 'center',
+      });
+
+    // Summary content
+    const summaryWidth = this.CONTENT_WIDTH - boxWidth - 15;
+    let summaryY = currentY + 5;
+
+    doc
+      .fontSize(8.5)
+      .fillColor('#1E1E1E')
+      .font('Helvetica')
+      .text(
+        analysisResult.bloodTestSummary.overallSummary,
+        summaryX,
+        summaryY,
+        {
+          width: summaryWidth,
+          align: 'left',
+          lineGap: 2,
+        },
+      );
+    summaryY = doc.y + 8;
+
+    // Detailed findings (bullets)
+    analysisResult.bloodTestSummary.detailedFindings.forEach((finding) => {
+      const bulletX = summaryX;
+      const textX = summaryX + 12;
+
+      doc
+        .fontSize(8.5)
+        .fillColor('#1E1E1E')
+        .font('Helvetica')
+        .text('•', bulletX, summaryY);
+
+      doc
+        .fontSize(8.5)
+        .fillColor('#1E1E1E')
+        .font('Helvetica')
+        .text(finding, textX, summaryY, {
+          width: summaryWidth - 12,
+          align: 'left',
+          lineGap: 2,
+        });
+      summaryY = doc.y + 5;
+    });
+
+    // Conclusion
+    doc
+      .fontSize(8.5)
+      .fillColor('#1E1E1E')
+      .font('Helvetica')
+      .text(
+        analysisResult.bloodTestSummary.conclusionStatement,
+        summaryX,
+        summaryY,
+        {
+          width: summaryWidth,
+          align: 'left',
+          lineGap: 2,
+        },
+      );
+
+    currentY += boxHeight + 25;
+
+    // Markers table
+    this.drawMarkersTable(doc, page1Markers, currentY);
+
+    // Footer
+    this.drawFooter(doc, pageNum, totalPages);
   }
 
-  private getMarkerPage(
+  private drawMarkerPage(
+    doc: PDFKit.PDFDocument,
+    logoBuffer: Buffer | null,
     reportDate: string,
     markers: MarkerInterpretation[],
     pageNum: number,
     totalPages: number,
-  ): string {
-    return `
-  <div class="page">
-    <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
-      <div class="date">Date of Report: ${reportDate}</div>
-    </div>
-    
-    <h1 class="page-title">Your blood test summary (continued)</h1>
-    
-    <table class="markers-table markers-table-continuation">
-      <thead>
-        <tr>
-          <th>Marker</th>
-          <th>Value</th>
-          <th>Normal Range</th>
-          <th>Interpretation</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${this.generateMarkerRows(markers)}
-      </tbody>
-    </table>
-    
-    <div class="footer">
-      <div class="disclaimer">
-        Disclaimer: This AI-generated report is for informational purposes only<br>
-        and is not medical diagnosis. Please consult a healthcare professional.
-      </div>
-      <div class="page-number">Page ${pageNum} of ${totalPages}</div>
-    </div>
-  </div>`;
+  ) {
+    let currentY = this.MARGIN;
+
+    // Header
+    this.drawHeader(doc, logoBuffer, reportDate, currentY);
+    currentY += 50;
+
+    // Page Title
+    doc
+      .fontSize(10)
+      .fillColor('#080B08')
+      .font('Helvetica-Bold')
+      .text('Your blood test summary (continued)', this.MARGIN, currentY, {
+        width: this.CONTENT_WIDTH,
+        align: 'center',
+      });
+    currentY += 25;
+
+    // Markers table
+    this.drawMarkersTable(doc, markers, currentY);
+
+    // Footer
+    this.drawFooter(doc, pageNum, totalPages);
   }
 
-  private getRecommendationsPage(
+  private drawRecommendationsPage(
+    doc: PDFKit.PDFDocument,
+    logoBuffer: Buffer | null,
     reportDate: string,
     inputData: CreateReviewDataDto,
     analysisResult: AiAnalysisResult,
     totalPages: number,
-  ): string {
-    return `
-  <div class="page">
-    <div class="header">
-      <img
-          src="https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png"
-          alt="PlasmAI"
-          width="80"
-      />
-      <div class="date">Date of Report: ${reportDate}</div>
-    </div>
-    
-    <h1 class="page-title">Your personalized recommendations</h1>
-  
-    <div class="wrapper-recommendations">
-      ${
-        inputData.nutritionAdvice && analysisResult.nutritionRecommendations
-          ? `
-        <div class="advice-block">
-          <h2 class="section-title">Nutrition advice</h2>
-          <ul class="recommendation-list">
-            ${analysisResult.nutritionRecommendations.descriptions.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      `
-          : ''
-      }
-      
-      ${
-        inputData.supplementRecommendations &&
-        analysisResult.supplementsRecommendations
-          ? `
-        <div class="advice-block">
-          <h2 class="section-title">Supplement recommendations</h2>
-          <ul class="recommendation-list">
-            ${analysisResult.supplementsRecommendations.descriptions.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      `
-          : ''
-      }
-      
-      ${
-        inputData.medicationGuidance && analysisResult.drugsRecommendations
-          ? `
-        <div class="advice-block">
-          <h2 class="section-title">Medical guidance</h2>
-          <ul class="recommendation-list">
-            ${analysisResult.drugsRecommendations.descriptions.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      `
-          : ''
-      }
-      
-      ${
-        inputData.exerciseGuidelines && analysisResult.exerciseRecommendations
-          ? `
-        <div class="advice-block">
-          <h2 class="section-title">Exercise guidelines</h2>
-          <ul class="recommendation-list">
-            ${analysisResult.exerciseRecommendations.descriptions.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      `
-          : ''
-      }
-    </div>
-    
-    ${
-      inputData.additionalQuestions && analysisResult.userQuestionResponse
-        ? `
-      <h3 class="question-answer-title">Answer to your question</h3>
-      <div class="question-answer-box">
-        <div class="question-label">Your Question:</div>
-        <div class="question-text">"${analysisResult.userQuestionResponse.question}"</div>
-        <div class="question-label">AI recommendations:</div>
-        <div class="answer-text">${analysisResult.userQuestionResponse.answer}</div>
-      </div>
-    `
-        : ''
+  ) {
+    let currentY = this.MARGIN;
+
+    // Header
+    this.drawHeader(doc, logoBuffer, reportDate, currentY);
+    currentY += 50;
+
+    // Page Title
+    doc
+      .fontSize(10)
+      .fillColor('#080B08')
+      .font('Helvetica-Bold')
+      .text('Your personalized recommendations', this.MARGIN, currentY, {
+        width: this.CONTENT_WIDTH,
+        align: 'center',
+      });
+    currentY += 25;
+
+    // Top border
+    doc
+      .moveTo(this.MARGIN, currentY)
+      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
+      .strokeColor('#DCDCDC')
+      .lineWidth(1)
+      .stroke();
+    currentY += 15;
+
+    // Nutrition advice
+    if (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) {
+      currentY = this.drawRecommendationSection(
+        doc,
+        'Nutrition advice',
+        analysisResult.nutritionRecommendations.descriptions,
+        currentY,
+      );
     }
-    
-    <div class="footer">
-      <div class="disclaimer">
-        Disclaimer: This AI-generated report is for informational purposes only<br>
-        and is not medical diagnosis. Please consult a healthcare professional.
-      </div>
-      <div class="page-number">Page ${totalPages} of ${totalPages}</div>
-    </div>
-  </div>`;
+
+    // Supplement recommendations
+    if (
+      inputData.supplementRecommendations &&
+      analysisResult.supplementsRecommendations
+    ) {
+      currentY = this.drawRecommendationSection(
+        doc,
+        'Supplement recommendations',
+        analysisResult.supplementsRecommendations.descriptions,
+        currentY,
+      );
+    }
+
+    // Medical guidance
+    if (inputData.medicationGuidance && analysisResult.drugsRecommendations) {
+      currentY = this.drawRecommendationSection(
+        doc,
+        'Medical guidance',
+        analysisResult.drugsRecommendations.descriptions,
+        currentY,
+      );
+    }
+
+    // Exercise guidelines
+    if (
+      inputData.exerciseGuidelines &&
+      analysisResult.exerciseRecommendations
+    ) {
+      currentY = this.drawRecommendationSection(
+        doc,
+        'Exercise guidelines',
+        analysisResult.exerciseRecommendations.descriptions,
+        currentY,
+      );
+    }
+
+    // Bottom border
+    doc
+      .moveTo(this.MARGIN, currentY)
+      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
+      .strokeColor('#DCDCDC')
+      .lineWidth(1)
+      .stroke();
+    currentY += 15;
+
+    // Q&A section
+    if (inputData.additionalQuestions && analysisResult.userQuestionResponse) {
+      doc
+        .fontSize(10)
+        .fillColor('#1F2937')
+        .font('Helvetica-Bold')
+        .text('Answer to your question', this.MARGIN, currentY, {
+          width: this.CONTENT_WIDTH,
+          align: 'center',
+        });
+      currentY += 20;
+
+      // Q&A box
+      const boxY = currentY;
+      doc
+        .roundedRect(this.MARGIN, boxY, this.CONTENT_WIDTH, 100, 6)
+        .lineWidth(1)
+        .strokeColor('#DCDCDC')
+        .fillColor('#FDFDFD')
+        .fillAndStroke();
+
+      // Left accent border
+      doc.rect(this.MARGIN, boxY, 4, 100).fillColor('#14B8A6').fill();
+
+      currentY += 15;
+
+      doc
+        .fontSize(9)
+        .fillColor('#525252')
+        .font('Helvetica')
+        .text('Your Question:', this.MARGIN + 15, currentY, {
+          width: this.CONTENT_WIDTH - 30,
+          align: 'left',
+        });
+      currentY += 15;
+
+      doc
+        .fontSize(9)
+        .fillColor('#1E1E1E')
+        .font('Helvetica-Oblique')
+        .text(
+          `"${analysisResult.userQuestionResponse.question}"`,
+          this.MARGIN + 15,
+          currentY,
+          {
+            width: this.CONTENT_WIDTH - 30,
+            align: 'left',
+            lineGap: 2,
+          },
+        );
+      currentY = doc.y + 15;
+
+      doc
+        .fontSize(9)
+        .fillColor('#525252')
+        .font('Helvetica')
+        .text('AI recommendations:', this.MARGIN + 15, currentY, {
+          width: this.CONTENT_WIDTH - 30,
+          align: 'left',
+        });
+      currentY += 15;
+
+      doc
+        .fontSize(9)
+        .fillColor('#1E1E1E')
+        .font('Helvetica')
+        .text(
+          analysisResult.userQuestionResponse.answer,
+          this.MARGIN + 15,
+          currentY,
+          {
+            width: this.CONTENT_WIDTH - 30,
+            align: 'left',
+            lineGap: 2,
+          },
+        );
+    }
+
+    // Footer
+    this.drawFooter(doc, totalPages, totalPages);
   }
 
-  private generateMarkerRows(markers: MarkerInterpretation[]): string {
-    return markers
-      .map((marker: MarkerInterpretation) => {
-        const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
-        const position = this.calculateMarkerPosition(
-          Number(marker.value),
-          Number(marker.referenceMin),
-          Number(marker.referenceMax),
-        );
-        return `
-          <tr>
-            <td>
-              <div class="marker-name-cell">
-                <div class="marker-dot ${statusClass}"></div>
-                <span>${marker.markerName}</span>
-              </div>
-            </td>
-            <td class="marker-value">${marker.value}</td>
-            <td>
-              <div class="range-cell">
-                <div class="health-bar">
-                  <div class="health-indicator ${statusClass}" style="left: ${position}%">▼</div>
-                </div>
-                <div class="range-text">${marker.referenceMin} - ${marker.referenceMax} ${marker.unit}</div>
-              </div>
-            </td>
-            <td>
-              <span class="status-badge ${statusClass}">${marker.status}</span>
-            </td>
-          </tr>
-        `;
+  private drawRecommendationSection(
+    doc: PDFKit.PDFDocument,
+    title: string,
+    items: string[],
+    startY: number,
+  ): number {
+    let currentY = startY;
+
+    // Section title
+    doc
+      .fontSize(9.5)
+      .fillColor('#1F2937')
+      .font('Helvetica')
+      .text(title, this.MARGIN + 5, currentY, { align: 'left' });
+    currentY += 18;
+
+    // Items with bullets
+    items.forEach((item) => {
+      const bulletX = this.MARGIN + 20;
+      const textX = this.MARGIN + 32;
+
+      doc
+        .fontSize(8.5)
+        .fillColor('#1F2937')
+        .font('Helvetica')
+        .text('•', bulletX, currentY);
+
+      doc
+        .fontSize(8.5)
+        .fillColor('#1F2937')
+        .font('Helvetica')
+        .text(item, textX, currentY, {
+          width: this.CONTENT_WIDTH - 42,
+          align: 'left',
+          lineGap: 2,
+        });
+      currentY = doc.y + 8;
+    });
+
+    // Divider line
+    doc
+      .moveTo(this.MARGIN, currentY)
+      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
+      .strokeColor('#DCDCDC')
+      .lineWidth(1)
+      .stroke();
+    currentY += 15;
+
+    return currentY;
+  }
+
+  private drawMarkersTable(
+    doc: PDFKit.PDFDocument,
+    markers: MarkerInterpretation[],
+    startY: number,
+  ) {
+    const tableWidth = this.CONTENT_WIDTH;
+    const col1Width = tableWidth * 0.3;
+    const col2Width = tableWidth * 0.1;
+    const col3Width = tableWidth * 0.42;
+    const col4Width = tableWidth * 0.18;
+
+    let currentY = startY;
+
+    // Table border
+    doc
+      .roundedRect(this.MARGIN, currentY, tableWidth, 30, 8)
+      .lineWidth(1)
+      .strokeColor('#DCDCDC')
+      .stroke();
+
+    // Header background
+    doc
+      .roundedRect(this.MARGIN, currentY, tableWidth, 30, 8)
+      .fillColor('#FDFDFD')
+      .fill();
+
+    // Header text
+    const headerY = currentY + 10;
+    doc
+      .fontSize(9)
+      .fillColor('#080B08')
+      .font('Helvetica-Bold')
+      .text('Marker', this.MARGIN + 10, headerY, {
+        width: col1Width - 20,
+        align: 'left',
       })
-      .join('');
+      .text('Value', this.MARGIN + col1Width + 10, headerY, {
+        width: col2Width - 20,
+        align: 'left',
+      })
+      .text('Normal Range', this.MARGIN + col1Width + col2Width + 10, headerY, {
+        width: col3Width - 20,
+        align: 'left',
+      })
+      .text(
+        'Interpretation',
+        this.MARGIN + col1Width + col2Width + col3Width + 10,
+        headerY,
+        { width: col4Width - 20, align: 'left' },
+      );
+
+    currentY += 30;
+
+    // Header bottom border
+    doc
+      .moveTo(this.MARGIN, currentY)
+      .lineTo(this.MARGIN + tableWidth, currentY)
+      .strokeColor('#DCDCDC')
+      .lineWidth(1)
+      .stroke();
+
+    // Rows
+    markers.forEach((marker, index) => {
+      const rowHeight = 40;
+      const rowY = currentY + 12;
+
+      // Status dot
+      const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
+      const dotColor = this.getStatusColor(statusClass);
+      doc
+        .circle(this.MARGIN + 15, rowY + 4, 5)
+        .fillColor(dotColor)
+        .fill();
+
+      // Marker name
+      doc
+        .fontSize(9)
+        .fillColor('#080B08')
+        .font('Helvetica')
+        .text(marker.markerName, this.MARGIN + 30, rowY, {
+          width: col1Width - 40,
+          align: 'left',
+        });
+
+      // Value
+      doc
+        .fontSize(9)
+        .fillColor('#080B08')
+        .font('Helvetica')
+        .text(String(marker.value), this.MARGIN + col1Width + 10, rowY, {
+          width: col2Width - 20,
+          align: 'left',
+        });
+
+      // Range bar and text
+      const barX = this.MARGIN + col1Width + col2Width + 10;
+      const barY = rowY + 3;
+      this.drawHealthBar(doc, barX, barY, marker);
+
+      const rangeText = `${marker.referenceMin} - ${marker.referenceMax} ${marker.unit}`;
+      doc
+        .fontSize(9)
+        .fillColor('#080B08')
+        .font('Helvetica')
+        .text(rangeText, barX + 130, rowY, {
+          width: col3Width - 140,
+          align: 'left',
+        });
+
+      // Status badge
+      this.drawStatusBadge(
+        doc,
+        marker.status,
+        this.MARGIN + col1Width + col2Width + col3Width + 10,
+        rowY - 2,
+      );
+
+      currentY += rowHeight;
+
+      // Row border (except last)
+      if (index < markers.length - 1) {
+        doc
+          .moveTo(this.MARGIN, currentY)
+          .lineTo(this.MARGIN + tableWidth, currentY)
+          .strokeColor('#DCDCDC')
+          .lineWidth(0.5)
+          .stroke();
+      }
+    });
+
+    // Final table border
+    const tableHeight = currentY - startY;
+    doc
+      .roundedRect(this.MARGIN, startY, tableWidth, tableHeight, 8)
+      .lineWidth(1)
+      .strokeColor('#DCDCDC')
+      .stroke();
+  }
+
+  private drawDonutChart(
+    doc: PDFKit.PDFDocument,
+    centerX: number,
+    centerY: number,
+    score: number,
+  ) {
+    const radius = 27;
+    const lineWidth = 8;
+
+    // Determine color based on score
+    const colors = this.getScoreColors(score);
+
+    // Background circle (light gray)
+    doc
+      .circle(centerX, centerY, radius)
+      .lineWidth(lineWidth)
+      .strokeColor('#E5E7EB')
+      .stroke();
+
+    // Progress arc (67% fixed) - draw gradient effect with multiple segments
+    const percentage = 67;
+    const angle = (percentage / 100) * 360;
+    const startAngle = -90;
+    const segments = 20; // Create smooth gradient with multiple arcs
+
+    for (let i = 0; i < segments; i++) {
+      const segmentAngle = angle / segments;
+      const currentStartAngle = startAngle + i * segmentAngle;
+      const currentEndAngle = currentStartAngle + segmentAngle;
+
+      // Interpolate color from 'to' to 'from' (reverse gradient)
+      const ratio = i / segments;
+      const color = this.interpolateColor(colors.to, colors.from, ratio);
+
+      this.drawArc(
+        doc,
+        centerX,
+        centerY,
+        radius,
+        currentStartAngle,
+        currentEndAngle,
+        lineWidth,
+        color,
+      );
+    }
+  }
+
+  private interpolateColor(
+    color1: string,
+    color2: string,
+    ratio: number,
+  ): string {
+    // Convert hex to RGB
+    const hex1 = color1.replace('#', '');
+    const hex2 = color2.replace('#', '');
+
+    const r1 = parseInt(hex1.substring(0, 2), 16);
+    const g1 = parseInt(hex1.substring(2, 4), 16);
+    const b1 = parseInt(hex1.substring(4, 6), 16);
+
+    const r2 = parseInt(hex2.substring(0, 2), 16);
+    const g2 = parseInt(hex2.substring(2, 4), 16);
+    const b2 = parseInt(hex2.substring(4, 6), 16);
+
+    // Interpolate
+    const r = Math.round(r1 + (r2 - r1) * ratio);
+    const g = Math.round(g1 + (g2 - g1) * ratio);
+    const b = Math.round(b1 + (b2 - b1) * ratio);
+
+    // Convert back to hex
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+
+  private drawArc(
+    doc: PDFKit.PDFDocument,
+    x: number,
+    y: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    lineWidth: number,
+    color: string,
+  ) {
+    const start = this.polarToCartesian(x, y, radius, startAngle);
+    const end = this.polarToCartesian(x, y, radius, endAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
+
+    doc.save();
+    doc
+      .path(
+        `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`,
+      )
+      .lineWidth(lineWidth)
+      .lineCap('round')
+      .strokeColor(color)
+      .stroke();
+    doc.restore();
+  }
+
+  private polarToCartesian(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    angleInDegrees: number,
+  ) {
+    const angleInRadians = (angleInDegrees * Math.PI) / 180.0;
+    return {
+      x: centerX + radius * Math.cos(angleInRadians),
+      y: centerY + radius * Math.sin(angleInRadians),
+    };
+  }
+
+  private drawHealthBar(
+    doc: PDFKit.PDFDocument,
+    x: number,
+    y: number,
+    marker: MarkerInterpretation,
+  ) {
+    const barWidth = 100;
+    const barHeight = 6;
+
+    // Draw gradient bar (simplified as segments)
+    const segments = [
+      { color: '#EF4444', start: 0, end: 0.2 },
+      { color: '#F59E0B', start: 0.2, end: 0.3 },
+      { color: '#10B981', start: 0.3, end: 0.7 },
+      { color: '#F59E0B', start: 0.7, end: 0.8 },
+      { color: '#EF4444', start: 0.8, end: 1.0 },
+    ];
+
+    segments.forEach((segment) => {
+      doc
+        .rect(
+          x + barWidth * segment.start,
+          y,
+          barWidth * (segment.end - segment.start),
+          barHeight,
+        )
+        .fillColor(segment.color)
+        .fill();
+    });
+
+    // Calculate indicator position
+    const position = this.calculateMarkerPosition(
+      Number(marker.value),
+      Number(marker.referenceMin),
+      Number(marker.referenceMax),
+    );
+
+    // Draw indicator
+    const indicatorX = x + (barWidth * position) / 100;
+    const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
+    const indicatorColor = this.getStatusColor(statusClass);
+
+    doc
+      .fontSize(10)
+      .fillColor(indicatorColor)
+      .text('▼', indicatorX - 4, y - 12);
+  }
+
+  private drawStatusBadge(
+    doc: PDFKit.PDFDocument,
+    status: string,
+    x: number,
+    y: number,
+  ) {
+    const badgeWidth = 80;
+    const badgeHeight = 18;
+    const statusClass = status.toLowerCase().replace(/ /g, '-');
+
+    const bgColor = this.getStatusBgColor(statusClass);
+    const textColor = this.getStatusTextColor(statusClass);
+    const borderColor = this.getStatusBorderColor(statusClass);
+
+    // Badge background
+    doc
+      .roundedRect(x, y, badgeWidth, badgeHeight, 3)
+      .lineWidth(1)
+      .strokeColor(borderColor)
+      .fillColor(bgColor)
+      .fillAndStroke();
+
+    // Badge text
+    doc
+      .fontSize(8)
+      .fillColor(textColor)
+      .font('Helvetica')
+      .text(status, x, y + 4, { width: badgeWidth, align: 'center' });
+  }
+
+  private getScoreColors(score: number): { from: string; to: string } {
+    if (score >= 85) return { from: '#047E56', to: '#32AC84' };
+    if (score >= 65) return { from: '#9BC74B', to: '#FE9901' };
+    return { from: '#FF9509', to: '#FF3B01' };
+  }
+
+  private getStatusColor(statusClass: string): string {
+    if (statusClass === 'normal') return '#10B981';
+    if (statusClass === 'slightly-high' || statusClass === 'slightly-low')
+      return '#F59E0B';
+    return '#EF4444';
+  }
+
+  private getStatusBgColor(statusClass: string): string {
+    if (statusClass === 'normal') return '#D1FAE5';
+    if (statusClass === 'slightly-high' || statusClass === 'slightly-low')
+      return '#FEF3C7';
+    return '#FEE2E2';
+  }
+
+  private getStatusTextColor(statusClass: string): string {
+    if (statusClass === 'normal') return '#065F46';
+    if (statusClass === 'slightly-high' || statusClass === 'slightly-low')
+      return '#92400E';
+    return '#991B1B';
+  }
+
+  private getStatusBorderColor(statusClass: string): string {
+    if (statusClass === 'normal') return '#A7F3D0';
+    if (statusClass === 'slightly-high' || statusClass === 'slightly-low')
+      return '#FDE68A';
+    return '#FECACA';
   }
 
   private calculateMarkerPosition(
