@@ -69,11 +69,6 @@ async function bootstrap() {
     credentials: true,
   });
 
-  setInterval(() => {
-    const usage = process.memoryUsage();
-    console.log(`Memory: ${Math.round(usage.heapUsed / 1024 / 1024)} MB`);
-  }, 5000);
-
   await app.listen(process.env.PORT ?? 3000);
   console.log(`app started on PORT ${process.env.PORT ?? 3000}`);
 }
