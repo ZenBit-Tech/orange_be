@@ -19,17 +19,19 @@ interface MarkerInterpretation {
 export class PdfService {
   private readonly LOGO_URL =
     'https://res.cloudinary.com/dqbv0zovj/image/upload/v1760468594/logo_rm2vto.png';
-  private readonly PAGE_WIDTH = 595.28; // A4 width in points
-  private readonly PAGE_HEIGHT = 841.89; // A4 height in points
-  private readonly MARGIN = 40;
-  private readonly CONTENT_WIDTH = this.PAGE_WIDTH - this.MARGIN * 2;
+  private readonly PAGE_WIDTH = 595.28;
+  private readonly PAGE_HEIGHT = 841.89;
+
+  private readonly MARGIN_X = 20;
+  private readonly MARGIN_Y = 1;
+
+  private readonly CONTENT_WIDTH = this.PAGE_WIDTH - this.MARGIN_X * 2;
 
   async generateHealthReportPdf(
     analysisResult: AiAnalysisResult,
     inputData: CreateReviewDataDto,
     debug = false,
   ): Promise<Buffer> {
-    // Download logo first (outside Promise constructor)
     let logoBuffer: Buffer | null = null;
     try {
       const response = await axios.get<ArrayBuffer>(this.LOGO_URL, {
@@ -45,13 +47,29 @@ export class PdfService {
         const doc = new PDFDocument({
           size: 'A4',
           margins: {
-            top: this.MARGIN,
-            bottom: this.MARGIN,
-            left: this.MARGIN,
-            right: this.MARGIN,
+            top: 0,
+            bottom: 0,
+            left: this.MARGIN_X,
+            right: this.MARGIN_X,
           },
           bufferPages: true,
         });
+
+        const fontsPath = path.join(process.cwd(), 'assets', 'fonts');
+
+        doc.registerFont(
+          'Poppins-Regular',
+          path.join(fontsPath, 'Poppins-Regular.ttf'),
+        );
+        doc.registerFont(
+          'Inter-Regular',
+          path.join(fontsPath, 'Inter-Regular.otf'),
+        );
+        doc.registerFont('Inter-Bold', path.join(fontsPath, 'Inter-Bold.otf'));
+        doc.registerFont(
+          'Inter-Italic',
+          path.join(fontsPath, 'Inter-Italic.otf'),
+        );
 
         const chunks: Buffer[] = [];
         doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -77,7 +95,6 @@ export class PdfService {
           year: 'numeric',
         });
 
-        // Pagination setup
         const firstPageMarkers = 12;
         const subsequentPageMarkers = 16;
         const totalMarkers = analysisResult.markersInterpretations.length;
@@ -113,7 +130,6 @@ export class PdfService {
         const totalPages =
           1 + markerPages.length + (hasRecommendations ? 1 : 0);
 
-        // Page 1: Summary
         this.drawFirstPage(
           doc,
           logoBuffer,
@@ -124,7 +140,6 @@ export class PdfService {
           totalPages,
         );
 
-        // Marker continuation pages
         markerPages.forEach((markers, index) => {
           doc.addPage();
           this.drawMarkerPage(
@@ -137,7 +152,6 @@ export class PdfService {
           );
         });
 
-        // Recommendations page
         if (hasRecommendations) {
           doc.addPage();
           this.drawRecommendationsPage(
@@ -165,7 +179,7 @@ export class PdfService {
   ) {
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, this.MARGIN, y, { width: 80 });
+        doc.image(logoBuffer, this.MARGIN_X, y, { width: 80 });
       } catch (error) {
         console.warn('Failed to embed logo:', error);
       }
@@ -174,9 +188,10 @@ export class PdfService {
     doc
       .fontSize(9)
       .fillColor('#525252')
+      .font('Inter-Regular')
       .text(
         `Date of Report: ${reportDate}`,
-        this.PAGE_WIDTH - this.MARGIN - 120,
+        this.PAGE_WIDTH - this.MARGIN_X - 120,
         y + 5,
         {
           width: 120,
@@ -190,14 +205,15 @@ export class PdfService {
     pageNum: number,
     totalPages: number,
   ) {
-    const footerY = this.PAGE_HEIGHT - this.MARGIN - 30;
+    const footerY = this.PAGE_HEIGHT - 30;
 
     doc
       .fontSize(8)
       .fillColor('#525252')
+      .font('Inter-Regular')
       .text(
         'Disclaimer: This AI-generated report is for informational purposes only\nand is not medical diagnosis. Please consult a healthcare professional.',
-        this.MARGIN,
+        this.MARGIN_X,
         footerY,
         { width: this.CONTENT_WIDTH * 0.7, align: 'left', lineGap: 2 },
       );
@@ -205,9 +221,10 @@ export class PdfService {
     doc
       .fontSize(8)
       .fillColor('#525252')
+      .font('Inter-Regular')
       .text(
         `Page ${pageNum} of ${totalPages}`,
-        this.PAGE_WIDTH - this.MARGIN - 80,
+        this.PAGE_WIDTH - this.MARGIN_X - 80,
         footerY,
         {
           width: 80,
@@ -225,69 +242,61 @@ export class PdfService {
     pageNum: number,
     totalPages: number,
   ) {
-    let currentY = this.MARGIN;
-
-    // Header
+    let currentY = this.MARGIN_Y;
     this.drawHeader(doc, logoBuffer, reportDate, currentY);
     currentY += 50;
 
-    // Page Title
     doc
       .fontSize(10)
       .fillColor('#080B08')
-      .font('Helvetica-Bold')
-      .text('Your blood test summary', this.MARGIN, currentY, {
+      .font('Poppins-Regular')
+      .text('Your blood test summary', this.MARGIN_X, currentY, {
         width: this.CONTENT_WIDTH,
         align: 'center',
       });
     currentY += 25;
 
-    // Wellness Score Box and Summary
     const wellnessScore = analysisResult.bloodTestSummary.overallWellnessScore;
     const boxWidth = 140;
     const boxHeight = 140;
-    const boxX = this.MARGIN;
+    const boxX = this.MARGIN_X;
     const summaryX = boxX + boxWidth + 15;
 
-    // Draw wellness box with border
     doc
       .roundedRect(boxX, currentY, boxWidth, boxHeight, 10)
       .lineWidth(1)
-      .strokeColor('#E5E7EB')
+      .strokeColor('#DCDCDC')
       .fillColor('#FFFFFF')
       .fillAndStroke();
 
-    // Wellness title
     doc
       .fontSize(9)
       .fillColor('#080B08')
-      .font('Helvetica')
+      .font('Poppins-Regular')
       .text('Overall wellness score', boxX, currentY + 15, {
         width: boxWidth,
         align: 'center',
       });
 
-    // Draw donut chart
     this.drawDonutChart(doc, boxX + boxWidth / 2, currentY + 75, wellnessScore);
 
-    // Score text
+    const scoreTextY = currentY + 67;
     doc
       .fontSize(12)
       .fillColor('#080B08')
-      .font('Helvetica-Bold')
-      .text(`${wellnessScore}%`, boxX, currentY + 68, {
+      .font('Poppins-Regular')
+      .text(`${wellnessScore}%`, boxX, scoreTextY, {
         width: boxWidth,
         align: 'center',
       });
 
-    // Summary content
     const summaryWidth = this.CONTENT_WIDTH - boxWidth - 15;
     let summaryY = currentY + 5;
 
     doc
       .fontSize(8.5)
       .fillColor('#1E1E1E')
-      .font('Helvetica')
+      .font('Inter-Regular')
       .text(
         analysisResult.bloodTestSummary.overallSummary,
         summaryX,
@@ -300,7 +309,6 @@ export class PdfService {
       );
     summaryY = doc.y + 8;
 
-    // Detailed findings (bullets)
     analysisResult.bloodTestSummary.detailedFindings.forEach((finding) => {
       const bulletX = summaryX;
       const textX = summaryX + 12;
@@ -308,13 +316,13 @@ export class PdfService {
       doc
         .fontSize(8.5)
         .fillColor('#1E1E1E')
-        .font('Helvetica')
+        .font('Inter-Regular')
         .text('•', bulletX, summaryY);
 
       doc
         .fontSize(8.5)
         .fillColor('#1E1E1E')
-        .font('Helvetica')
+        .font('Inter-Regular')
         .text(finding, textX, summaryY, {
           width: summaryWidth - 12,
           align: 'left',
@@ -323,11 +331,10 @@ export class PdfService {
       summaryY = doc.y + 5;
     });
 
-    // Conclusion
     doc
       .fontSize(8.5)
       .fillColor('#1E1E1E')
-      .font('Helvetica')
+      .font('Inter-Regular')
       .text(
         analysisResult.bloodTestSummary.conclusionStatement,
         summaryX,
@@ -341,10 +348,8 @@ export class PdfService {
 
     currentY += boxHeight + 25;
 
-    // Markers table
     this.drawMarkersTable(doc, page1Markers, currentY);
 
-    // Footer
     this.drawFooter(doc, pageNum, totalPages);
   }
 
@@ -356,27 +361,23 @@ export class PdfService {
     pageNum: number,
     totalPages: number,
   ) {
-    let currentY = this.MARGIN;
+    let currentY = this.MARGIN_Y;
 
-    // Header
     this.drawHeader(doc, logoBuffer, reportDate, currentY);
     currentY += 50;
 
-    // Page Title
     doc
       .fontSize(10)
       .fillColor('#080B08')
-      .font('Helvetica-Bold')
-      .text('Your blood test summary (continued)', this.MARGIN, currentY, {
+      .font('Poppins-Regular')
+      .text('Your blood test summary (continued)', this.MARGIN_X, currentY, {
         width: this.CONTENT_WIDTH,
         align: 'center',
       });
     currentY += 25;
 
-    // Markers table
     this.drawMarkersTable(doc, markers, currentY);
 
-    // Footer
     this.drawFooter(doc, pageNum, totalPages);
   }
 
@@ -388,33 +389,29 @@ export class PdfService {
     analysisResult: AiAnalysisResult,
     totalPages: number,
   ) {
-    let currentY = this.MARGIN;
+    let currentY = this.MARGIN_Y;
 
-    // Header
     this.drawHeader(doc, logoBuffer, reportDate, currentY);
     currentY += 50;
 
-    // Page Title
     doc
       .fontSize(10)
       .fillColor('#080B08')
-      .font('Helvetica-Bold')
-      .text('Your personalized recommendations', this.MARGIN, currentY, {
+      .font('Poppins-Regular')
+      .text('Your personalized recommendations', this.MARGIN_X, currentY, {
         width: this.CONTENT_WIDTH,
         align: 'center',
       });
     currentY += 25;
 
-    // Top border
     doc
-      .moveTo(this.MARGIN, currentY)
-      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
+      .moveTo(this.MARGIN_X, currentY)
+      .lineTo(this.PAGE_WIDTH - this.MARGIN_X, currentY)
       .strokeColor('#DCDCDC')
       .lineWidth(1)
       .stroke();
     currentY += 15;
 
-    // Nutrition advice
     if (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) {
       currentY = this.drawRecommendationSection(
         doc,
@@ -424,7 +421,6 @@ export class PdfService {
       );
     }
 
-    // Supplement recommendations
     if (
       inputData.supplementRecommendations &&
       analysisResult.supplementsRecommendations
@@ -437,7 +433,6 @@ export class PdfService {
       );
     }
 
-    // Medical guidance
     if (inputData.medicationGuidance && analysisResult.drugsRecommendations) {
       currentY = this.drawRecommendationSection(
         doc,
@@ -447,7 +442,6 @@ export class PdfService {
       );
     }
 
-    // Exercise guidelines
     if (
       inputData.exerciseGuidelines &&
       analysisResult.exerciseRecommendations
@@ -460,46 +454,49 @@ export class PdfService {
       );
     }
 
-    // Bottom border
-    doc
-      .moveTo(this.MARGIN, currentY)
-      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
-      .strokeColor('#DCDCDC')
-      .lineWidth(1)
-      .stroke();
-    currentY += 15;
-
-    // Q&A section
     if (inputData.additionalQuestions && analysisResult.userQuestionResponse) {
       doc
         .fontSize(10)
         .fillColor('#1F2937')
-        .font('Helvetica-Bold')
-        .text('Answer to your question', this.MARGIN, currentY, {
+        .font('Poppins-Regular')
+        .text('Answer to your question', this.MARGIN_X, currentY, {
           width: this.CONTENT_WIDTH,
           align: 'center',
         });
       currentY += 20;
 
-      // Q&A box
+      const questionText = `"${analysisResult.userQuestionResponse.question}"`;
+      const answerText = analysisResult.userQuestionResponse.answer;
+
+      doc.fontSize(9).font('Inter-Italic');
+      const questionHeight = doc.heightOfString(questionText, {
+        width: this.CONTENT_WIDTH - 30,
+      });
+
+      doc.fontSize(9).font('Inter-Regular');
+      const answerHeight = doc.heightOfString(answerText, {
+        width: this.CONTENT_WIDTH - 30,
+      });
+
+      const boxHeight = 15 + 15 + questionHeight + 15 + 15 + answerHeight + 15;
       const boxY = currentY;
+
       doc
-        .roundedRect(this.MARGIN, boxY, this.CONTENT_WIDTH, 100, 6)
+        .roundedRect(this.MARGIN_X, boxY, this.CONTENT_WIDTH, boxHeight, 6)
         .lineWidth(1)
         .strokeColor('#DCDCDC')
         .fillColor('#FDFDFD')
         .fillAndStroke();
 
-      // Left accent border
-      doc.rect(this.MARGIN, boxY, 4, 100).fillColor('#14B8A6').fill();
+      doc.rect(this.MARGIN_X, boxY, 4, boxHeight).fillColor('#14B8A6').fill();
 
       currentY += 15;
 
       doc
         .fontSize(9)
         .fillColor('#525252')
-        .font('Helvetica')
-        .text('Your Question:', this.MARGIN + 15, currentY, {
+        .font('Poppins-Regular')
+        .text('Your Question:', this.MARGIN_X + 15, currentY, {
           width: this.CONTENT_WIDTH - 30,
           align: 'left',
         });
@@ -508,24 +505,19 @@ export class PdfService {
       doc
         .fontSize(9)
         .fillColor('#1E1E1E')
-        .font('Helvetica-Oblique')
-        .text(
-          `"${analysisResult.userQuestionResponse.question}"`,
-          this.MARGIN + 15,
-          currentY,
-          {
-            width: this.CONTENT_WIDTH - 30,
-            align: 'left',
-            lineGap: 2,
-          },
-        );
+        .font('Inter-Italic')
+        .text(questionText, this.MARGIN_X + 15, currentY, {
+          width: this.CONTENT_WIDTH - 30,
+          align: 'left',
+          lineGap: 2,
+        });
       currentY = doc.y + 15;
 
       doc
         .fontSize(9)
         .fillColor('#525252')
-        .font('Helvetica')
-        .text('AI recommendations:', this.MARGIN + 15, currentY, {
+        .font('Poppins-Regular')
+        .text('AI recommendations:', this.MARGIN_X + 15, currentY, {
           width: this.CONTENT_WIDTH - 30,
           align: 'left',
         });
@@ -534,20 +526,16 @@ export class PdfService {
       doc
         .fontSize(9)
         .fillColor('#1E1E1E')
-        .font('Helvetica')
-        .text(
-          analysisResult.userQuestionResponse.answer,
-          this.MARGIN + 15,
-          currentY,
-          {
-            width: this.CONTENT_WIDTH - 30,
-            align: 'left',
-            lineGap: 2,
-          },
-        );
+        .font('Inter-Regular')
+        .text(answerText, this.MARGIN_X + 15, currentY, {
+          width: this.CONTENT_WIDTH - 30,
+          align: 'left',
+          lineGap: 2,
+        });
+
+      currentY = boxY + boxHeight + 10;
     }
 
-    // Footer
     this.drawFooter(doc, totalPages, totalPages);
   }
 
@@ -559,29 +547,27 @@ export class PdfService {
   ): number {
     let currentY = startY;
 
-    // Section title
     doc
       .fontSize(9.5)
       .fillColor('#1F2937')
-      .font('Helvetica')
-      .text(title, this.MARGIN + 5, currentY, { align: 'left' });
+      .font('Poppins-Regular')
+      .text(title, this.MARGIN_X + 5, currentY, { align: 'left' });
     currentY += 18;
 
-    // Items with bullets
     items.forEach((item) => {
-      const bulletX = this.MARGIN + 20;
-      const textX = this.MARGIN + 32;
+      const bulletX = this.MARGIN_X + 20;
+      const textX = this.MARGIN_X + 32;
 
       doc
         .fontSize(8.5)
         .fillColor('#1F2937')
-        .font('Helvetica')
+        .font('Inter-Regular')
         .text('•', bulletX, currentY);
 
       doc
         .fontSize(8.5)
         .fillColor('#1F2937')
-        .font('Helvetica')
+        .font('Inter-Regular')
         .text(item, textX, currentY, {
           width: this.CONTENT_WIDTH - 42,
           align: 'left',
@@ -590,10 +576,9 @@ export class PdfService {
       currentY = doc.y + 8;
     });
 
-    // Divider line
     doc
-      .moveTo(this.MARGIN, currentY)
-      .lineTo(this.PAGE_WIDTH - this.MARGIN, currentY)
+      .moveTo(this.MARGIN_X, currentY)
+      .lineTo(this.PAGE_WIDTH - this.MARGIN_X, currentY)
       .strokeColor('#DCDCDC')
       .lineWidth(1)
       .stroke();
@@ -615,89 +600,77 @@ export class PdfService {
 
     let currentY = startY;
 
-    // Table border
     doc
-      .roundedRect(this.MARGIN, currentY, tableWidth, 30, 8)
-      .lineWidth(1)
-      .strokeColor('#DCDCDC')
-      .stroke();
-
-    // Header background
-    doc
-      .roundedRect(this.MARGIN, currentY, tableWidth, 30, 8)
+      .roundedRect(this.MARGIN_X, currentY, tableWidth, 30, 8)
       .fillColor('#FDFDFD')
       .fill();
 
-    // Header text
     const headerY = currentY + 10;
     doc
       .fontSize(9)
       .fillColor('#080B08')
-      .font('Helvetica-Bold')
-      .text('Marker', this.MARGIN + 10, headerY, {
+      .font('Poppins-Regular')
+      .text('Marker', this.MARGIN_X + 10, headerY, {
         width: col1Width - 20,
         align: 'left',
       })
-      .text('Value', this.MARGIN + col1Width + 10, headerY, {
+      .text('Value', this.MARGIN_X + col1Width + 10, headerY, {
         width: col2Width - 20,
         align: 'left',
       })
-      .text('Normal Range', this.MARGIN + col1Width + col2Width + 10, headerY, {
-        width: col3Width - 20,
-        align: 'left',
-      })
+      .text(
+        'Normal Range',
+        this.MARGIN_X + col1Width + col2Width + 10,
+        headerY,
+        {
+          width: col3Width - 20,
+          align: 'left',
+        },
+      )
       .text(
         'Interpretation',
-        this.MARGIN + col1Width + col2Width + col3Width + 10,
+        this.MARGIN_X + col1Width + col2Width + col3Width + 10,
         headerY,
         { width: col4Width - 20, align: 'left' },
       );
 
     currentY += 30;
 
-    // Header bottom border
     doc
-      .moveTo(this.MARGIN, currentY)
-      .lineTo(this.MARGIN + tableWidth, currentY)
+      .moveTo(this.MARGIN_X, currentY)
+      .lineTo(this.MARGIN_X + tableWidth, currentY)
       .strokeColor('#DCDCDC')
       .lineWidth(1)
       .stroke();
 
-    // Rows
     markers.forEach((marker, index) => {
       const rowHeight = 40;
-      const rowY = currentY + 12;
-
-      // Status dot
+      const rowY = currentY + rowHeight / 2 - 6;
       const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
       const dotColor = this.getStatusColor(statusClass);
       doc
-        .circle(this.MARGIN + 15, rowY + 4, 5)
+        .circle(this.MARGIN_X + 15, rowY + 4, 5)
         .fillColor(dotColor)
         .fill();
-
-      // Marker name
       doc
         .fontSize(9)
         .fillColor('#080B08')
-        .font('Helvetica')
-        .text(marker.markerName, this.MARGIN + 30, rowY, {
+        .font('Inter-Regular')
+        .text(this.sanitizeText(marker.markerName), this.MARGIN_X + 30, rowY, {
           width: col1Width - 40,
           align: 'left',
         });
 
-      // Value
       doc
         .fontSize(9)
         .fillColor('#080B08')
-        .font('Helvetica')
-        .text(String(marker.value), this.MARGIN + col1Width + 10, rowY, {
+        .font('Inter-Regular')
+        .text(String(marker.value), this.MARGIN_X + col1Width + 10, rowY, {
           width: col2Width - 20,
           align: 'left',
         });
 
-      // Range bar and text
-      const barX = this.MARGIN + col1Width + col2Width + 10;
+      const barX = this.MARGIN_X + col1Width + col2Width + 10;
       const barY = rowY + 3;
       this.drawHealthBar(doc, barX, barY, marker);
 
@@ -705,37 +678,34 @@ export class PdfService {
       doc
         .fontSize(9)
         .fillColor('#080B08')
-        .font('Helvetica')
-        .text(rangeText, barX + 130, rowY, {
-          width: col3Width - 140,
+        .font('Inter-Regular')
+        .text(this.sanitizeText(rangeText), barX + 110, rowY, {
+          width: col3Width - 110,
           align: 'left',
         });
 
-      // Status badge
       this.drawStatusBadge(
         doc,
         marker.status,
-        this.MARGIN + col1Width + col2Width + col3Width + 10,
-        rowY - 2,
+        this.MARGIN_X + col1Width + col2Width + col3Width + 10,
+        rowY - 4,
       );
 
       currentY += rowHeight;
 
-      // Row border (except last)
       if (index < markers.length - 1) {
         doc
-          .moveTo(this.MARGIN, currentY)
-          .lineTo(this.MARGIN + tableWidth, currentY)
+          .moveTo(this.MARGIN_X, currentY)
+          .lineTo(this.MARGIN_X + tableWidth, currentY)
           .strokeColor('#DCDCDC')
           .lineWidth(0.5)
           .stroke();
       }
     });
 
-    // Final table border
     const tableHeight = currentY - startY;
     doc
-      .roundedRect(this.MARGIN, startY, tableWidth, tableHeight, 8)
+      .roundedRect(this.MARGIN_X, startY, tableWidth, tableHeight, 8)
       .lineWidth(1)
       .strokeColor('#DCDCDC')
       .stroke();
@@ -749,29 +719,24 @@ export class PdfService {
   ) {
     const radius = 27;
     const lineWidth = 8;
-
-    // Determine color based on score
     const colors = this.getScoreColors(score);
 
-    // Background circle (light gray)
     doc
       .circle(centerX, centerY, radius)
       .lineWidth(lineWidth)
-      .strokeColor('#E5E7EB')
+      .strokeColor('#FFFFFF')
       .stroke();
 
-    // Progress arc (67% fixed) - draw gradient effect with multiple segments
     const percentage = 67;
     const angle = (percentage / 100) * 360;
     const startAngle = -90;
-    const segments = 20; // Create smooth gradient with multiple arcs
+    const segments = 20;
 
     for (let i = 0; i < segments; i++) {
       const segmentAngle = angle / segments;
       const currentStartAngle = startAngle + i * segmentAngle;
       const currentEndAngle = currentStartAngle + segmentAngle;
 
-      // Interpolate color from 'to' to 'from' (reverse gradient)
       const ratio = i / segments;
       const color = this.interpolateColor(colors.to, colors.from, ratio);
 
@@ -793,7 +758,6 @@ export class PdfService {
     color2: string,
     ratio: number,
   ): string {
-    // Convert hex to RGB
     const hex1 = color1.replace('#', '');
     const hex2 = color2.replace('#', '');
 
@@ -805,12 +769,10 @@ export class PdfService {
     const g2 = parseInt(hex2.substring(2, 4), 16);
     const b2 = parseInt(hex2.substring(4, 6), 16);
 
-    // Interpolate
     const r = Math.round(r1 + (r2 - r1) * ratio);
     const g = Math.round(g1 + (g2 - g1) * ratio);
     const b = Math.round(b1 + (b2 - b1) * ratio);
 
-    // Convert back to hex
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
@@ -861,8 +823,8 @@ export class PdfService {
   ) {
     const barWidth = 100;
     const barHeight = 6;
+    const borderRadius = 12;
 
-    // Draw gradient bar (simplified as segments)
     const segments = [
       { color: '#EF4444', start: 0, end: 0.2 },
       { color: '#F59E0B', start: 0.2, end: 0.3 },
@@ -870,6 +832,9 @@ export class PdfService {
       { color: '#F59E0B', start: 0.7, end: 0.8 },
       { color: '#EF4444', start: 0.8, end: 1.0 },
     ];
+
+    doc.save();
+    doc.roundedRect(x, y, barWidth, barHeight, borderRadius).clip();
 
     segments.forEach((segment) => {
       doc
@@ -882,23 +847,46 @@ export class PdfService {
         .fillColor(segment.color)
         .fill();
     });
+    doc.restore();
 
-    // Calculate indicator position
     const position = this.calculateMarkerPosition(
       Number(marker.value),
       Number(marker.referenceMin),
       Number(marker.referenceMax),
     );
 
-    // Draw indicator
     const indicatorX = x + (barWidth * position) / 100;
     const statusClass = marker.status.toLowerCase().replace(/ /g, '-');
     const indicatorColor = this.getStatusColor(statusClass);
 
+    const triangleWidth = 8;
+    const triangleHeight = 10;
+    const triangleTop = y - triangleHeight - 1;
+
+    doc.save();
     doc
-      .fontSize(10)
+      .moveTo(indicatorX, y - 1)
+      .lineTo(indicatorX - triangleWidth / 2, triangleTop)
+      .lineTo(indicatorX + triangleWidth / 2, triangleTop)
+      .closePath()
       .fillColor(indicatorColor)
-      .text('▼', indicatorX - 4, y - 12);
+      .fill();
+    doc.restore();
+  }
+
+  private sanitizeText(text: string): string {
+    return text
+      .replace(/μ/g, 'u')
+      .replace(/°/g, 'deg')
+      .replace(/±/g, '+/-')
+      .replace(/≥/g, '>=')
+      .replace(/≤/g, '<=')
+      .replace(/–/g, '-')
+      .replace(/—/g, '-')
+      .replace(/'/g, "'")
+      .replace(/'/g, "'")
+      .replace(/"/g, '"')
+      .replace(/"/g, '"');
   }
 
   private drawStatusBadge(
@@ -915,7 +903,6 @@ export class PdfService {
     const textColor = this.getStatusTextColor(statusClass);
     const borderColor = this.getStatusBorderColor(statusClass);
 
-    // Badge background
     doc
       .roundedRect(x, y, badgeWidth, badgeHeight, 3)
       .lineWidth(1)
@@ -923,11 +910,10 @@ export class PdfService {
       .fillColor(bgColor)
       .fillAndStroke();
 
-    // Badge text
     doc
       .fontSize(8)
       .fillColor(textColor)
-      .font('Helvetica')
+      .font('Inter-Regular')
       .text(status, x, y + 4, { width: badgeWidth, align: 'center' });
   }
 
