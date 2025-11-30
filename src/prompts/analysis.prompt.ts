@@ -40,8 +40,14 @@ export function getSummaryAndRecsPrompt(data: CreateReviewDataDto): string {
 
       INSTRUCTIONS:
       1. Leave "markersInterpretations" EMPTY [].
-      2. Fill all recommendation fields strictly.
-      3. Start advice with "Discuss with your doctor...".
+      2.Scoring Logic: Determine "overallWellnessScore" by categorizing the patient into one of these tiers based on "statuses":
+         - 90-100 (Optimal): All markers Normal, or 1-2 minor variations.
+         - 75-89 (Good): Several Warnings, but NO Critical issues.
+         - 60-74 (Caution): Many Warnings OR 1 Critical issue.
+         - Below 60 (Attention Needed): Multiple Critical issues or systemic imbalance.      
+    3. Recommendations Style: 
+         - Use prefix "Discuss with your doctor..." ONLY if recommending specific medications or heavy supplements.
+         - For lifestyle, diet, or general habits, give direct advice WITHOUT the prefix.
     `;
 }
 
