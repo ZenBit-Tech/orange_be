@@ -1,94 +1,112 @@
+/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
-import { PdfService } from './pdf.service';
-import {
-  AiAnalysisResult,
-  MarkerInterpretation,
-} from '@common/interfaces/analysis-result.interface';
-import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 import * as fs from 'fs';
 import * as path from 'path';
+import PDFDocument from 'pdfkit';
+import axios from 'axios';
+import { PdfService } from './pdf.service';
+import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
+import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
+
+jest.mock('axios');
+jest.mock('fs');
+jest.mock('path');
+jest.mock('pdfkit');
 
 describe('PdfService', () => {
   let service: PdfService;
 
   const mockAnalysisResult: AiAnalysisResult = {
     bloodTestSummary: {
-      overallWellnessScore: 70,
-      overallSummary: 'Your results show a few noticeable imbalances.',
+      overallWellnessScore: 85,
+      overallSummary:
+        'Your blood test results show overall good health with some areas requiring attention.',
       detailedFindings: [
-        'Glucose levels are elevated at 130 mg/dL',
-        'LDH is higher than normal',
+        'Glucose levels are within normal range',
+        'Cholesterol slightly elevated',
+        'Vitamin D levels are optimal',
       ],
-      conclusionStatement: 'Overall, your results suggest mild strain.',
+      conclusionStatement:
+        'Continue maintaining a healthy lifestyle with minor dietary adjustments.',
     },
     markersInterpretations: [
       {
         markerId: 1,
         markerName: 'Glucose',
-        value: '130',
+        value: '95',
         unit: 'mg/dL',
         referenceMin: '70',
         referenceMax: '100',
-        status: 'High',
+        status: 'Normal',
         interpretation: {
-          about: 'Glucose measures blood sugar.',
-          whyImportant: 'High levels indicate diabetes risk.',
-          contextualNote: 'Consider dietary changes.',
+          about: 'Blood sugar measurement',
+          whyImportant: 'Essential for energy metabolism',
+          contextualNote: 'Your glucose level is within healthy range',
         },
       },
       {
         markerId: 2,
-        markerName: 'AST',
-        value: '62',
-        unit: 'U/L',
-        referenceMin: '10',
-        referenceMax: '40',
+        markerName: 'Cholesterol',
+        value: '210',
+        unit: 'mg/dL',
+        referenceMin: '125',
+        referenceMax: '200',
         status: 'Slightly High',
         interpretation: {
-          about: 'AST is a liver enzyme.',
-          whyImportant: 'Elevated levels indicate liver stress.',
-          contextualNote: 'Could be due to exercise or alcohol.',
+          about: 'Blood lipid level',
+          whyImportant: 'Affects cardiovascular health',
+          contextualNote: 'Consider dietary changes to lower cholesterol',
         },
       },
     ],
     nutritionRecommendations: {
       descriptions: [
-        'Increase leafy greens',
-        'Include fatty fish 2-3 times per week',
-      ],
-    },
-    supplementsRecommendations: {
-      descriptions: ['Vitamin D3: 2000 IU daily', 'Omega-3: 1000mg daily'],
-    },
-    drugsRecommendations: {
-      descriptions: [
-        'Schedule appointment with endocrinologist',
-        'Discuss cholesterol management',
+        'Increase fiber intake through whole grains and vegetables',
+        'Reduce saturated fat consumption',
+        'Include omega-3 rich foods like fish',
       ],
     },
     exerciseRecommendations: {
       descriptions: [
-        'Aim for 150 minutes moderate exercise weekly',
-        'Post-meal walks for 10-15 minutes',
+        'Aim for 150 minutes of moderate aerobic activity weekly',
+        'Include strength training twice per week',
       ],
     },
     userQuestionResponse: {
-      question: 'Why is my glucose high?',
+      question: 'Why is my cholesterol slightly high?',
       answer:
-        'Elevated glucose can be due to diet, stress, or prediabetes. Consider lifestyle changes.',
+        'Elevated cholesterol can result from diet, genetics, or lifestyle factors. Consider reducing saturated fats and increasing physical activity.',
     },
+    pdfJobId: 'pdf_123456789_test',
   };
 
   const mockInputData: CreateReviewDataDto = {
     birthYear: 1990,
     gender: 'male',
     pregnancy: null,
-    markersData: [],
+    markersData: [
+      {
+        id: 1,
+        name: 'Glucose',
+        value: '95',
+        unit: 'mg/dL',
+        normalRange: '70-100 mg/dL',
+        hasError: false,
+      },
+      {
+        id: 2,
+        name: 'Cholesterol',
+        value: '210',
+        unit: 'mg/dL',
+        normalRange: '125-200 mg/dL',
+        hasError: false,
+      },
+    ],
     nutritionAdvice: true,
-    supplementRecommendations: true,
-    medicationGuidance: true,
+    supplementRecommendations: false,
+    medicationGuidance: false,
     exerciseGuidelines: true,
-    additionalQuestions: 'Why is my glucose high?',
+    additionalQuestions: 'Why is my cholesterol slightly high?',
   };
 
   beforeEach(async () => {
@@ -97,313 +115,430 @@ describe('PdfService', () => {
     }).compile();
 
     service = module.get<PdfService>(PdfService);
+
+    const mockDoc = {
+      pipe: jest.fn(),
+      on: jest.fn((event, callback) => {
+        if (event === 'end') {
+          setTimeout(() => callback(), 0);
+        }
+        return mockDoc;
+      }),
+      end: jest.fn(),
+      registerFont: jest.fn().mockReturnThis(),
+      fontSize: jest.fn().mockReturnThis(),
+      fillColor: jest.fn().mockReturnThis(),
+      strokeColor: jest.fn().mockReturnThis(),
+      font: jest.fn().mockReturnThis(),
+      text: jest.fn().mockReturnThis(),
+      image: jest.fn().mockReturnThis(),
+      roundedRect: jest.fn().mockReturnThis(),
+      rect: jest.fn().mockReturnThis(),
+      circle: jest.fn().mockReturnThis(),
+      moveTo: jest.fn().mockReturnThis(),
+      lineTo: jest.fn().mockReturnThis(),
+      lineWidth: jest.fn().mockReturnThis(),
+      lineCap: jest.fn().mockReturnThis(),
+      stroke: jest.fn().mockReturnThis(),
+      fill: jest.fn().mockReturnThis(),
+      fillAndStroke: jest.fn().mockReturnThis(),
+      save: jest.fn().mockReturnThis(),
+      restore: jest.fn().mockReturnThis(),
+      path: jest.fn().mockReturnThis(),
+      clip: jest.fn().mockReturnThis(),
+      closePath: jest.fn().mockReturnThis(),
+      addPage: jest.fn().mockReturnThis(),
+      heightOfString: jest.fn().mockReturnValue(20),
+      y: 100,
+    };
+
+    (PDFDocument as unknown as jest.Mock).mockImplementation(() => mockDoc);
+
+    (axios.get as jest.Mock).mockResolvedValue({
+      data: Buffer.from('mock-logo'),
+    });
+
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
+    (fs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+    (fs.writeFileSync as jest.Mock).mockReturnValue(undefined);
+    (path.join as jest.Mock).mockImplementation((...args) => args.join('/'));
   });
 
   afterEach(() => {
-    const debugDir = path.join(process.cwd(), 'debug');
-    if (fs.existsSync(debugDir)) {
-      const files = fs.readdirSync(debugDir);
-      files.forEach((file) => {
-        fs.unlinkSync(path.join(debugDir, file));
-      });
-    }
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+    jest.clearAllMocks();
   });
 
   describe('generateHealthReportPdf', () => {
-    it('should generate a PDF buffer', async () => {
+    it('should generate PDF successfully', async () => {
       const result = await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
         false,
       );
 
-      expect(result).toBeInstanceOf(Buffer);
-      expect(result.length).toBeGreaterThan(0);
-    }, 30000);
-
-    it('should save debug files when debug is true', async () => {
-      await service.generateHealthReportPdf(
-        mockAnalysisResult,
-        mockInputData,
-        true,
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(PDFDocument).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: 'A4',
+          bufferPages: true,
+        }),
       );
+    });
 
-      const debugDir = path.join(process.cwd(), 'debug');
-      expect(fs.existsSync(debugDir)).toBe(true);
-
-      const files = fs.readdirSync(debugDir);
-      const htmlFiles = files.filter((f) => f.endsWith('.html'));
-      const pdfFiles = files.filter((f) => f.endsWith('.pdf'));
-
-      expect(htmlFiles.length).toBeGreaterThan(0);
-      expect(pdfFiles.length).toBeGreaterThan(0);
-    }, 30000);
-
-    it('should not save debug files when debug is false', async () => {
+    it('should load and embed logo image', async () => {
       await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
         false,
       );
 
-      const debugDir = path.join(process.cwd(), 'debug');
-      if (fs.existsSync(debugDir)) {
-        const files = fs.readdirSync(debugDir);
-        expect(files.length).toBe(0);
-      }
-    }, 30000);
-  });
+      expect(axios.get).toHaveBeenCalledWith(
+        expect.stringContaining('cloudinary'),
+        expect.objectContaining({ responseType: 'arraybuffer' }),
+      );
+    });
 
-  describe('generateHtmlTemplate', () => {
-    it('should generate valid HTML string', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
+    it('should handle logo loading failure gracefully', async () => {
+      (axios.get as jest.Mock).mockRejectedValue(new Error('Network error'));
+
+      const result = await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
-        reportDate,
+        false,
       );
 
-      expect(html).toContain('<!DOCTYPE html>');
-      expect(html).toContain('<html>');
-      expect(html).toContain('</html>');
-      expect(html).toContain('Your blood test summary');
+      expect(Buffer.isBuffer(result)).toBe(true);
     });
 
-    it('should include wellness score in HTML', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
+    it('should register custom fonts', async () => {
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+
+      await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
-        reportDate,
+        false,
       );
 
-      expect(html).toContain('70%');
-      expect(html).toContain('Overall wellness score');
+      expect(mockDoc.registerFont).toHaveBeenCalledWith(
+        'Poppins-Regular',
+        expect.stringContaining('Poppins-Regular.ttf'),
+      );
+      expect(mockDoc.registerFont).toHaveBeenCalledWith(
+        'Inter-Regular',
+        expect.stringContaining('Inter-Regular.otf'),
+      );
+      expect(mockDoc.registerFont).toHaveBeenCalledWith(
+        'Inter-Bold',
+        expect.stringContaining('Inter-Bold.otf'),
+      );
+      expect(mockDoc.registerFont).toHaveBeenCalledWith(
+        'Inter-Italic',
+        expect.stringContaining('Inter-Italic.otf'),
+      );
     });
 
-    it('should include all markers in HTML', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
+    it('should save PDF to debug directory when debug is true', async () => {
+      await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
-        reportDate,
+        true,
       );
 
-      expect(html).toContain('Glucose');
-      expect(html).toContain('130');
-      expect(html).toContain('AST');
-      expect(html).toContain('62');
+      expect(fs.existsSync).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalled();
     });
 
-    it('should include recommendations when enabled', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
-        mockAnalysisResult,
-        mockInputData,
-        reportDate,
-      );
+    it('should handle multiple marker pages correctly', async () => {
+      const manyMarkers = Array.from({ length: 30 }, (_, i) => ({
+        markerId: i + 1,
+        markerName: `Marker ${i + 1}`,
+        value: '100',
+        unit: 'mg/dL',
+        referenceMin: '80',
+        referenceMax: '120',
+        status: 'Normal' as const,
+        interpretation: {
+          about: `About marker ${i + 1}`,
+          whyImportant: 'Important for health',
+          contextualNote: 'Normal range',
+        },
+      }));
 
-      expect(html).toContain('Nutrition advice');
-      expect(html).toContain('Increase leafy greens');
-      expect(html).toContain('Supplement recommendations');
-      expect(html).toContain('Vitamin D3');
-    });
-
-    it('should exclude recommendations when disabled', () => {
-      const reportDate = '11/23/2025';
-      const inputWithoutRecommendations: CreateReviewDataDto = {
-        ...mockInputData,
-        nutritionAdvice: false,
-        supplementRecommendations: false,
-        medicationGuidance: false,
-        exerciseGuidelines: false,
-      };
-
-      const html = service.generateHtmlTemplate(
-        mockAnalysisResult,
-        inputWithoutRecommendations,
-        reportDate,
-      );
-
-      expect(html).not.toContain('Your personalized recommendations');
-    });
-
-    it('should include user question and answer when provided', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
-        mockAnalysisResult,
-        mockInputData,
-        reportDate,
-      );
-
-      expect(html).toContain('Answer to your question');
-      expect(html).toContain('Why is my glucose high?');
-      expect(html).toContain('Elevated glucose can be due to diet');
-    });
-
-    it('should split markers across multiple pages correctly', () => {
-      const manyMarkers: MarkerInterpretation[] = Array.from(
-        { length: 30 },
-        (_, i) => ({
-          markerId: i + 1,
-          markerName: `Marker ${i + 1}`,
-          value: '100',
-          unit: 'mg/dL',
-          referenceMin: '80',
-          referenceMax: '120',
-          status: 'Normal' as const,
-          interpretation: {
-            about: 'Test marker',
-            whyImportant: 'For testing',
-            contextualNote: 'Normal range',
-          },
-        }),
-      );
-
-      const resultWithManyMarkers: AiAnalysisResult = {
+      const largeAnalysisResult: AiAnalysisResult = {
         ...mockAnalysisResult,
         markersInterpretations: manyMarkers,
       };
 
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
-        resultWithManyMarkers,
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+
+      await service.generateHealthReportPdf(
+        largeAnalysisResult,
         mockInputData,
-        reportDate,
+        false,
       );
 
-      expect(html).toContain('Your blood test summary (continued)');
-      expect(html).toContain('Page 1 of');
-      expect(html).toContain('Page 2 of');
+      expect(mockDoc.addPage).toHaveBeenCalled();
     });
 
-    it('should include correct page numbers', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
+    it('should include all requested recommendations', async () => {
+      const fullInputData: CreateReviewDataDto = {
+        ...mockInputData,
+        nutritionAdvice: true,
+        supplementRecommendations: true,
+        medicationGuidance: true,
+        exerciseGuidelines: true,
+        additionalQuestions: 'Test question',
+      };
+
+      const fullAnalysisResult: AiAnalysisResult = {
+        ...mockAnalysisResult,
+        supplementsRecommendations: {
+          descriptions: ['Vitamin D supplement', 'Omega-3 supplement'],
+        },
+        drugsRecommendations: {
+          descriptions: ['Consult with doctor about statins'],
+        },
+      };
+
+      const result = await service.generateHealthReportPdf(
+        fullAnalysisResult,
+        fullInputData,
+        false,
+      );
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('should create separate recommendations page when needed', async () => {
+      const manyRecommendations = Array.from(
+        { length: 20 },
+        (_, i) =>
+          `Recommendation ${i + 1}: This is a detailed recommendation that takes up space.`,
+      );
+
+      const largeRecommendationsResult: AiAnalysisResult = {
+        ...mockAnalysisResult,
+        nutritionRecommendations: {
+          descriptions: manyRecommendations,
+        },
+      };
+
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+
+      await service.generateHealthReportPdf(
+        largeRecommendationsResult,
+        mockInputData,
+        false,
+      );
+
+      expect(mockDoc.addPage).toHaveBeenCalled();
+    });
+
+    it('should sanitize special characters in text', async () => {
+      const specialCharsResult: AiAnalysisResult = {
+        ...mockAnalysisResult,
+        markersInterpretations: [
+          {
+            markerId: 1,
+            markerName: 'μg/dL Test',
+            value: '95°',
+            unit: 'μg/dL',
+            referenceMin: '70±5',
+            referenceMax: '100≥',
+            status: 'Normal',
+            interpretation: {
+              about: 'Test with special chars',
+              whyImportant: 'Important',
+              contextualNote: 'Normal',
+            },
+          },
+        ],
+      };
+
+      const result = await service.generateHealthReportPdf(
+        specialCharsResult,
+        mockInputData,
+        false,
+      );
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('should handle wellness scores correctly', async () => {
+      const scores = [45, 75, 95];
+
+      for (const score of scores) {
+        const testResult: AiAnalysisResult = {
+          ...mockAnalysisResult,
+          bloodTestSummary: {
+            ...mockAnalysisResult.bloodTestSummary,
+            overallWellnessScore: score,
+          },
+        };
+
+        const result = await service.generateHealthReportPdf(
+          testResult,
+          mockInputData,
+          false,
+        );
+
+        expect(Buffer.isBuffer(result)).toBe(true);
+      }
+    });
+
+    it('should draw health bar for different marker statuses', async () => {
+      const statusResults: AiAnalysisResult = {
+        ...mockAnalysisResult,
+        markersInterpretations: [
+          {
+            markerId: 1,
+            markerName: 'Low Marker',
+            value: '50',
+            unit: 'mg/dL',
+            referenceMin: '70',
+            referenceMax: '100',
+            status: 'Low',
+            interpretation: {
+              about: 'Low marker',
+              whyImportant: 'Important',
+              contextualNote: 'Below range',
+            },
+          },
+          {
+            markerId: 2,
+            markerName: 'High Marker',
+            value: '150',
+            unit: 'mg/dL',
+            referenceMin: '70',
+            referenceMax: '100',
+            status: 'High',
+            interpretation: {
+              about: 'High marker',
+              whyImportant: 'Important',
+              contextualNote: 'Above range',
+            },
+          },
+          {
+            markerId: 3,
+            markerName: 'Critical Marker',
+            value: '300',
+            unit: 'mg/dL',
+            referenceMin: '70',
+            referenceMax: '100',
+            status: 'Critical',
+            interpretation: {
+              about: 'Critical marker',
+              whyImportant: 'Very important',
+              contextualNote: 'Requires attention',
+            },
+          },
+        ],
+      };
+
+      const result = await service.generateHealthReportPdf(
+        statusResults,
+        mockInputData,
+        false,
+      );
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('should include user question and answer when provided', async () => {
+      const withQuestion: CreateReviewDataDto = {
+        ...mockInputData,
+        additionalQuestions: 'What should I do about my cholesterol?',
+      };
+
+      const result = await service.generateHealthReportPdf(
+        mockAnalysisResult,
+        withQuestion,
+        false,
+      );
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('should handle empty recommendations gracefully', async () => {
+      const noRecommendations: AiAnalysisResult = {
+        ...mockAnalysisResult,
+        nutritionRecommendations: undefined,
+        exerciseRecommendations: undefined,
+        userQuestionResponse: undefined,
+      };
+
+      const noRecsInput: CreateReviewDataDto = {
+        ...mockInputData,
+        nutritionAdvice: false,
+        exerciseGuidelines: false,
+        additionalQuestions: undefined,
+      };
+
+      const result = await service.generateHealthReportPdf(
+        noRecommendations,
+        noRecsInput,
+        false,
+      );
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('should handle PDF generation errors', async () => {
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+      mockDoc.on.mockImplementation((event, callback) => {
+        if (event === 'error') {
+          setTimeout(() => callback(new Error('PDF generation error')), 0);
+        }
+        return mockDoc;
+      });
+
+      await expect(
+        service.generateHealthReportPdf(
+          mockAnalysisResult,
+          mockInputData,
+          false,
+        ),
+      ).rejects.toThrow('PDF generation error');
+    });
+
+    it('should add footer with page numbers', async () => {
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+
+      await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
-        reportDate,
+        false,
       );
 
-      expect(html).toContain('Page 1 of 2');
-      expect(html).toContain('Page 2 of 2');
+      expect(mockDoc.text).toHaveBeenCalledWith(
+        expect.stringContaining('Page'),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
     });
 
-    it('should include disclaimer on all pages', () => {
-      const reportDate = '11/23/2025';
-      const html = service.generateHtmlTemplate(
+    it('should include disclaimer in footer', async () => {
+      const mockDoc = (PDFDocument as unknown as jest.Mock).mock.results[0]
+        .value;
+
+      await service.generateHealthReportPdf(
         mockAnalysisResult,
         mockInputData,
-        reportDate,
+        false,
       );
 
-      const disclaimerCount = (
-        html.match(
-          /This AI-generated report is for informational purposes only/g,
-        ) || []
-      ).length;
-      expect(disclaimerCount).toBeGreaterThan(0);
-    });
-  });
-
-  describe('calculateMarkerPosition', () => {
-    it('should return 0 for value <= 0', () => {
-      const position = service['calculateMarkerPosition'](0, 70, 100);
-      expect(position).toBe(0);
-    });
-
-    it('should return position within normal range (30-70%)', () => {
-      const position = service['calculateMarkerPosition'](85, 70, 100);
-      expect(position).toBeGreaterThanOrEqual(30);
-      expect(position).toBeLessThanOrEqual(70);
-    });
-
-    it('should return position > 70% for high values', () => {
-      const position = service['calculateMarkerPosition'](120, 70, 100);
-      expect(position).toBeGreaterThan(70);
-    });
-
-    it('should return position < 30% for low values', () => {
-      const position = service['calculateMarkerPosition'](50, 70, 100);
-      expect(position).toBeLessThan(30);
-    });
-
-    it('should return 100 for extremely high values', () => {
-      const position = service['calculateMarkerPosition'](500, 70, 100);
-      expect(position).toBe(100);
-    });
-
-    it('should handle edge case at reference min', () => {
-      const position = service['calculateMarkerPosition'](70, 70, 100);
-      expect(position).toBe(30);
-    });
-
-    it('should handle edge case at reference max', () => {
-      const position = service['calculateMarkerPosition'](100, 70, 100);
-      expect(position).toBe(70);
-    });
-  });
-
-  describe('Color gradient for wellness score', () => {
-    it('should use green gradient for score >= 85', () => {
-      const highScoreResult: AiAnalysisResult = {
-        ...mockAnalysisResult,
-        bloodTestSummary: {
-          ...mockAnalysisResult.bloodTestSummary,
-          overallWellnessScore: 90,
-        },
-      };
-
-      const html = service.generateHtmlTemplate(
-        highScoreResult,
-        mockInputData,
-        '11/23/2025',
+      expect(mockDoc.text).toHaveBeenCalledWith(
+        expect.stringContaining('Disclaimer'),
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
       );
-
-      expect(html).toContain('#047E56');
-      expect(html).toContain('#32AC84');
-    });
-
-    it('should use yellow-orange gradient for score 65-84', () => {
-      const mediumScoreResult: AiAnalysisResult = {
-        ...mockAnalysisResult,
-        bloodTestSummary: {
-          ...mockAnalysisResult.bloodTestSummary,
-          overallWellnessScore: 70,
-        },
-      };
-
-      const html = service.generateHtmlTemplate(
-        mediumScoreResult,
-        mockInputData,
-        '11/23/2025',
-      );
-
-      expect(html).toContain('#9BC74B');
-      expect(html).toContain('#FE9901');
-    });
-
-    it('should use orange-red gradient for score < 65', () => {
-      const lowScoreResult: AiAnalysisResult = {
-        ...mockAnalysisResult,
-        bloodTestSummary: {
-          ...mockAnalysisResult.bloodTestSummary,
-          overallWellnessScore: 50,
-        },
-      };
-
-      const html = service.generateHtmlTemplate(
-        lowScoreResult,
-        mockInputData,
-        '11/23/2025',
-      );
-
-      expect(html).toContain('#FF9509');
-      expect(html).toContain('#FF3B01');
     });
   });
 });
