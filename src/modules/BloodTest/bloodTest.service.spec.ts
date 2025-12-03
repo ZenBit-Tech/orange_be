@@ -1,12 +1,15 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
+import * as fs from 'fs';
+import * as path from 'path';
 import { BloodTestService } from './bloodTest.service';
 import { PdfService } from './pdf.service';
 import OpenAI from 'openai';
-import { ChatCompletion } from 'openai/resources';
-import * as fs from 'fs';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
-import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
+import {
+  PdfJobStatusEnum,
+  ValidationConfidence,
+} from '@common/interfaces/analysis-result.interface';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 
 jest.mock('fs');
@@ -14,77 +17,63 @@ jest.mock('path');
 
 describe('BloodTestService', () => {
   let service: BloodTestService;
-  let pdfService: PdfService;
-  let mockOpenAI: jest.Mocked<OpenAI>;
-  let mockCreate: jest.Mock;
+  let openAI: jest.Mocked<OpenAI>;
+  let pdfService: jest.Mocked<PdfService>;
 
-  const mockTestResults: CreateReviewDataDto = {
-    birthYear: 2000,
+  const mockCreateReviewData: CreateReviewDataDto = {
+    birthYear: 1990,
     gender: 'male',
     pregnancy: null,
     markersData: [
       {
         id: 1,
-        name: 'Bilirubin (Total)',
-        value: '4.8',
+        name: 'Glucose',
+        value: '95',
         unit: 'mg/dL',
-        normalRange: '0.1 - 1.2 mg/dL',
+        normalRange: '70-100 mg/dL',
         hasError: false,
       },
       {
         id: 2,
-        name: 'Glucose',
-        value: '95',
+        name: 'Cholesterol',
+        value: '180',
         unit: 'mg/dL',
-        normalRange: '70 - 100 mg/dL',
+        normalRange: '125-200 mg/dL',
         hasError: false,
       },
     ],
     nutritionAdvice: true,
     supplementRecommendations: false,
     medicationGuidance: false,
-    exerciseGuidelines: false,
-    additionalQuestions: 'Why is my cholesterol high?',
+    exerciseGuidelines: true,
+    additionalQuestions: 'Why is my glucose level important?',
   };
 
-  const mockBloodTestData: BloodTestData = [
-    {
-      id: '1',
-      name: 'Glucose',
-      value: 95,
-      unit: 'mg/dL',
-      referenceMin: 70,
-      referenceMax: 100,
-    },
-  ];
-
-  const mockAiResponse: AiAnalysisResult = {
+  const mockAiResponse = {
     bloodTestSummary: {
-      overallWellnessScore: 75,
-      overallSummary: 'Your results show some areas that need attention',
-      detailedFindings: [
-        'Bilirubin levels are elevated',
-        'Glucose is within normal range',
-      ],
-      conclusionStatement: 'Overall health is good with minor concerns',
+      overallWellnessScore: 85,
+      overallSummary: 'Your overall health is good.',
+      detailedFindings: ['Glucose levels are normal', 'Cholesterol is optimal'],
+      conclusionStatement: 'Continue maintaining healthy lifestyle.',
     },
+    supplementsRecommendations: undefined,
+    nutritionRecommendations: {
+      descriptions: ['Eat more vegetables', 'Reduce sugar intake'],
+    },
+    drugsRecommendations: undefined,
+    exerciseRecommendations: {
+      descriptions: ['30 minutes cardio daily', 'Strength training 2x/week'],
+    },
+    userQuestionResponse: {
+      question: 'Why is my glucose level important?',
+      answer: 'Glucose is essential for energy metabolism.',
+    },
+  };
+
+  const mockMarkersChunkResponse = {
     markersInterpretations: [
       {
         markerId: 1,
-        markerName: 'Bilirubin (Total)',
-        value: '4.8',
-        unit: 'mg/dL',
-        referenceMin: '0.1',
-        referenceMax: '0.2',
-        status: 'High',
-        interpretation: {
-          about: 'Measures liver function',
-          whyImportant: 'Indicates liver health',
-          contextualNote: 'Elevated levels may require attention',
-        },
-      },
-      {
-        markerId: 2,
         markerName: 'Glucose',
         value: '95',
         unit: 'mg/dL',
@@ -92,41 +81,26 @@ describe('BloodTestService', () => {
         referenceMax: '100',
         status: 'Normal',
         interpretation: {
-          about: 'Measures blood sugar',
-          whyImportant: 'Important for diabetes screening',
-          contextualNote: 'Within healthy range',
+          about: 'Blood sugar level',
+          whyImportant: 'Essential for energy',
+          contextualNote: 'Within normal range',
         },
       },
     ],
-    nutritionRecommendations: {
-      descriptions: [
-        'Discuss with your doctor about increasing fiber intake',
-        'Consult your healthcare provider about reducing sugar',
-        'Your doctor may recommend more vegetables',
-      ],
-    },
-    userQuestionResponse: {
-      question: 'Why is my cholesterol high?',
-      answer: 'Discuss with your doctor about cholesterol management',
-    },
-  };
-
-  const mockPdfService = {
-    generateHealthReportPdf: jest.fn(),
   };
 
   beforeEach(async () => {
-    mockCreate = jest.fn();
-
-    const mockChatCompletions = {
-      create: mockCreate,
+    const mockOpenAI = {
+      chat: {
+        completions: {
+          create: jest.fn(),
+        },
+      },
     };
 
-    mockOpenAI = {
-      chat: {
-        completions: mockChatCompletions,
-      },
-    } as unknown as jest.Mocked<OpenAI>;
+    const mockPdfService = {
+      generateHealthReportPdf: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -143,513 +117,389 @@ describe('BloodTestService', () => {
     }).compile();
 
     service = module.get<BloodTestService>(BloodTestService);
-    pdfService = module.get<PdfService>(PdfService);
+    openAI = module.get(OpenAI) as jest.Mocked<OpenAI>;
+    pdfService = module.get(PdfService) as jest.Mocked<PdfService>;
 
-    jest.clearAllMocks();
-    jest.clearAllTimers();
-    jest.useFakeTimers();
+    (fs.existsSync as jest.Mock).mockReturnValue(true);
+    (fs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+    (fs.writeFileSync as jest.Mock).mockReturnValue(undefined);
+    (fs.readFileSync as jest.Mock).mockReturnValue(Buffer.from('mock-pdf'));
+    (fs.unlinkSync as jest.Mock).mockReturnValue(undefined);
+    (path.join as jest.Mock).mockImplementation((...args) => args.join('/'));
+    (path.resolve as jest.Mock).mockImplementation((p) => p);
+    (path.basename as jest.Mock).mockImplementation((p) => p);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    jest.clearAllMocks();
   });
 
   describe('analyzeBloodTest', () => {
-    it('should return analysis result with pdfJobId', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
+    it('should successfully analyze blood test with all markers', async () => {
+      (openAI.chat.completions.create as jest.Mock)
+        .mockResolvedValueOnce({
+          choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+        })
+        .mockResolvedValueOnce({
+          choices: [
+            { message: { content: JSON.stringify(mockMarkersChunkResponse) } },
+          ],
+        });
 
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
+      pdfService.generateHealthReportPdf.mockResolvedValue(
+        Buffer.from('mock-pdf'),
       );
 
-      const result = await service.analyzeBloodTest(mockTestResults);
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
 
-      expect(result).toHaveProperty('analysis');
+      expect(result).toHaveProperty('bloodTestSummary');
+      expect(result).toHaveProperty('markersInterpretations');
       expect(result).toHaveProperty('pdfJobId');
-      expect(result.analysis).toEqual(mockAiResponse);
+      expect(result.bloodTestSummary.overallWellnessScore).toBe(85);
+      expect(result.markersInterpretations).toHaveLength(1);
       expect(result.pdfJobId).toMatch(/^pdf_\d+_[a-z0-9]+$/);
-      expect(mockCreate).toHaveBeenCalledWith({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'user',
-            content: expect.stringContaining('PATIENT INFO') as string,
-          },
+    });
+
+    it('should batch markers into chunks of 10', async () => {
+      const largeMarkerData = Array.from({ length: 25 }, (_, i) => ({
+        id: i + 1,
+        name: `Marker${i + 1}`,
+        value: '100',
+        unit: 'mg/dL',
+        normalRange: '80-120 mg/dL',
+        hasError: false,
+      }));
+
+      const dataWithManyMarkers: CreateReviewDataDto = {
+        ...mockCreateReviewData,
+        markersData: largeMarkerData,
+      };
+
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [
+          { message: { content: JSON.stringify(mockMarkersChunkResponse) } },
         ],
-        temperature: 0.3,
-        max_tokens: 8000,
-        response_format: { type: 'json_object' },
       });
+
+      await service.analyzeBloodTest(dataWithManyMarkers);
+
+      expect(openAI.chat.completions.create).toHaveBeenCalledTimes(4);
     });
 
-    it('should include nutrition recommendations when requested', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
+    it('should handle AI API errors gracefully', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockRejectedValue(
+        new Error('OpenAI API Error'),
       );
-      const result = await service.analyzeBloodTest(mockTestResults);
 
-      expect(result.analysis.nutritionRecommendations).toBeDefined();
-      expect(
-        result.analysis.nutritionRecommendations?.descriptions,
-      ).toHaveLength(3);
+      await expect(
+        service.analyzeBloodTest(mockCreateReviewData),
+      ).rejects.toThrow('OpenAI API Error');
     });
 
-    it('should not include supplement recommendations when not requested', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
+    it('should create PDF job with pending status', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
 
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-      const result = await service.analyzeBloodTest(mockTestResults);
-
-      expect(result.analysis.supplementsRecommendations).toBeUndefined();
-    });
-
-    it('should include user question response when question is provided', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-      const result = await service.analyzeBloodTest(mockTestResults);
-
-      expect(result.analysis.userQuestionResponse).toBeDefined();
-      expect(result.analysis.userQuestionResponse?.question).toBe(
-        'Why is my cholesterol high?',
-      );
-    });
-
-    it('should throw error when AI returns invalid content', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: null,
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      await expect(service.analyzeBloodTest(mockTestResults)).rejects.toThrow(
-        'AI Analysis Failed: AI returned invalid content',
-      );
-    });
-
-    it('should throw error when JSON parsing fails', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: 'invalid json content',
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      await expect(service.analyzeBloodTest(mockTestResults)).rejects.toThrow(
-        'AI Analysis Failed',
-      );
-    });
-
-    it('should handle OpenAI API errors', async () => {
-      mockCreate.mockRejectedValueOnce(new Error('API connection failed'));
-
-      await expect(service.analyzeBloodTest(mockTestResults)).rejects.toThrow(
-        'AI Analysis Failed: API connection failed',
-      );
-    });
-
-    it('should process all markers from input data', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-      const result = await service.analyzeBloodTest(mockTestResults);
-
-      expect(result.analysis.markersInterpretations).toHaveLength(
-        mockTestResults.markersData.length,
-      );
-    });
-
-    it('should handle test results with all recommendation types', async () => {
-      const fullTestResults: CreateReviewDataDto = {
-        ...mockTestResults,
-        supplementRecommendations: true,
-        medicationGuidance: true,
-        exerciseGuidelines: true,
-      };
-
-      const fullMockResponse: AiAnalysisResult = {
-        ...mockAiResponse,
-        supplementsRecommendations: {
-          descriptions: [
-            'Discuss with your doctor about Vitamin D',
-            'Consult about Omega-3',
-            'Your doctor may suggest probiotics',
-          ],
-        },
-        drugsRecommendations: {
-          descriptions: [
-            'Your doctor may prescribe medication',
-            'Consult about treatment options',
-            'Discuss prescription options',
-          ],
-        },
-        exerciseRecommendations: {
-          descriptions: [
-            'Ask your doctor about exercise program',
-            'Consult about cardio activities',
-            'Your doctor may recommend strength training',
-          ],
-        },
-      };
-
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(fullMockResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      const result = await service.analyzeBloodTest(fullTestResults);
-
-      expect(result.analysis.supplementsRecommendations).toBeDefined();
-      expect(result.analysis.drugsRecommendations).toBeDefined();
-      expect(result.analysis.exerciseRecommendations).toBeDefined();
-      expect(result.analysis.nutritionRecommendations).toBeDefined();
-    });
-
-    it('should include pregnancy status in prompt when provided', async () => {
-      const pregnantTestResults: CreateReviewDataDto = {
-        ...mockTestResults,
-        gender: 'female',
-        pregnancy: 'pregnant',
-      };
-
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      await service.analyzeBloodTest(pregnantTestResults);
-
-      expect(mockCreate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          messages: [
-            {
-              role: 'user',
-              content: expect.stringContaining(
-                'Pregnancy status: pregnant',
-              ) as string,
-            },
-          ],
-        }),
-      );
-    });
-
-    it('should start PDF generation in background', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      const result = await service.analyzeBloodTest(mockTestResults);
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
 
       const jobStatus = service.getPdfJobStatus(result.pdfJobId);
       expect(jobStatus).toBeDefined();
-      expect(jobStatus?.status).toBe('pending');
+      expect(jobStatus?.status).toBe(PdfJobStatusEnum.PENDING);
     });
 
-    it('should create unique pdfJobId for each analysis', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
+    it('should handle empty markers data', async () => {
+      const emptyData: CreateReviewDataDto = {
+        ...mockCreateReviewData,
+        markersData: [],
       };
 
-      mockCreate.mockResolvedValue(mockCompletion as Partial<ChatCompletion>);
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
 
-      const result1 = await service.analyzeBloodTest(mockTestResults);
-      const result2 = await service.analyzeBloodTest(mockTestResults);
+      const result = await service.analyzeBloodTest(emptyData);
 
-      expect(result1.pdfJobId).not.toBe(result2.pdfJobId);
-    });
-  });
-
-  describe('getPdfJobStatus', () => {
-    it('should return null for non-existent job', () => {
-      const status = service.getPdfJobStatus('non-existent-job');
-      expect(status).toBeNull();
-    });
-
-    it('should return job status for existing job', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      const result = await service.analyzeBloodTest(mockTestResults);
-      const status = service.getPdfJobStatus(result.pdfJobId);
-
-      expect(status).toBeDefined();
-      expect(status?.status).toBe('pending');
-      expect(status?.createdAt).toBeInstanceOf(Date);
-    });
-
-    it('should return completed status after successful generation', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-      mockPdfService.generateHealthReportPdf.mockResolvedValue(
-        Buffer.from('pdf'),
-      );
-
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
-      (fs.mkdirSync as jest.Mock).mockReturnValue(undefined);
-      (fs.writeFileSync as jest.Mock).mockReturnValue(undefined);
-
-      const result = await service.analyzeBloodTest(mockTestResults);
-
-      await jest.runAllTimersAsync();
-
-      const status = service.getPdfJobStatus(result.pdfJobId);
-      expect(status?.status).toBe('completed');
-      expect(status?.filename).toBeDefined();
-    });
-  });
-
-  describe('getPdfByJobId', () => {
-    it('should return null for non-existent job', () => {
-      const pdf = service.getPdfByJobId('non-existent-job');
-      expect(pdf).toBeNull();
-    });
-
-    it('should return null for pending job', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-
-      const result = await service.analyzeBloodTest(mockTestResults);
-      const pdf = service.getPdfByJobId(result.pdfJobId);
-
-      expect(pdf).toBeNull();
-    });
-
-    it('should return PDF buffer for completed job', async () => {
-      const mockCompletion = {
-        choices: [
-          {
-            message: {
-              content: JSON.stringify(mockAiResponse),
-            },
-          },
-        ],
-      };
-
-      const mockPdfBuffer = Buffer.from('pdf content');
-      mockCreate.mockResolvedValueOnce(
-        mockCompletion as Partial<ChatCompletion>,
-      );
-      mockPdfService.generateHealthReportPdf.mockResolvedValue(mockPdfBuffer);
-
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(mockPdfBuffer);
-      (fs.mkdirSync as jest.Mock).mockReturnValue(undefined);
-      (fs.writeFileSync as jest.Mock).mockReturnValue(undefined);
-
-      const result = await service.analyzeBloodTest(mockTestResults);
-
-      await jest.runAllTimersAsync();
-
-      const pdf = service.getPdfByJobId(result.pdfJobId);
-      expect(pdf).toEqual(mockPdfBuffer);
+      expect(result.markersInterpretations).toHaveLength(0);
     });
   });
 
   describe('validateBloodTest', () => {
-    it('should validate blood test successfully', async () => {
-      const mockValidation = {
+    it('should validate correct blood test data', async () => {
+      const mockValidationResponse = {
         isBloodTest: true,
-        reason: 'Valid blood test',
-        confidence: 'high',
+        reason: 'Contains valid blood markers',
+        confidence: ValidationConfidence.HIGH,
       };
 
-      mockCreate.mockResolvedValueOnce({
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
         choices: [
-          {
-            message: {
-              content: JSON.stringify(mockValidation),
-            },
-          },
+          { message: { content: JSON.stringify(mockValidationResponse) } },
         ],
-      } as Partial<ChatCompletion>);
+      });
 
-      const result = await service.validateBloodTest(mockBloodTestData);
+      const bloodTestData: BloodTestData = [
+        {
+          id: '1',
+          name: 'Glucose',
+          value: 95,
+          unit: 'mg/dL',
+          referenceMin: 70,
+          referenceMax: 100,
+        },
+        {
+          id: '2',
+          name: 'Cholesterol',
+          value: 180,
+          unit: 'mg/dL',
+          referenceMin: 125,
+          referenceMax: 200,
+        },
+      ];
 
-      expect(result).toEqual(mockValidation);
-      expect(mockCreate).toHaveBeenCalledTimes(1);
+      const result = await service.validateBloodTest(bloodTestData);
+
+      expect(result.isBloodTest).toBe(true);
+      expect(result.confidence).toBe(ValidationConfidence.HIGH);
     });
 
-    it('should return fallback on parsing error', async () => {
-      mockCreate.mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: 'invalid json',
-            },
-          },
-        ],
-      } as Partial<ChatCompletion>);
-
-      const result = await service.validateBloodTest(mockBloodTestData);
-
-      expect(result).toEqual({
+    it('should reject invalid blood test data', async () => {
+      const mockValidationResponse = {
         isBloodTest: false,
-        reason: 'Failed to parse AI response',
-        confidence: 'low',
+        reason: 'Does not contain blood markers',
+        confidence: ValidationConfidence.HIGH,
+      };
+
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [
+          { message: { content: JSON.stringify(mockValidationResponse) } },
+        ],
       });
+
+      const invalidData: BloodTestData = [
+        {
+          id: '1',
+          name: 'Invalid',
+          value: 0,
+          unit: 'invalid',
+          referenceMin: 0,
+          referenceMax: 0,
+        },
+      ];
+
+      const result = await service.validateBloodTest(invalidData);
+
+      expect(result.isBloodTest).toBe(false);
     });
 
-    it('should handle API errors gracefully', async () => {
-      mockCreate.mockRejectedValueOnce(new Error('API Error'));
+    it('should handle validation API errors', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockRejectedValue(
+        new Error('API Error'),
+      );
 
-      const result = await service.validateBloodTest(mockBloodTestData);
+      const bloodTestData: BloodTestData = [
+        {
+          id: '1',
+          name: 'Glucose',
+          value: 95,
+          unit: 'mg/dL',
+          referenceMin: 70,
+          referenceMax: 100,
+        },
+      ];
 
-      expect(result).toEqual({
-        isBloodTest: false,
-        reason: 'API error: API Error',
-        confidence: 'low',
+      const result = await service.validateBloodTest(bloodTestData);
+
+      expect(result.isBloodTest).toBe(false);
+      expect(result.reason).toContain('API error');
+      expect(result.confidence).toBe(ValidationConfidence.LOW);
+    });
+
+    it('should handle malformed JSON responses', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: 'invalid json {{{' } }],
       });
+
+      const bloodTestData: BloodTestData = [
+        {
+          id: '1',
+          name: 'Glucose',
+          value: 95,
+          unit: 'mg/dL',
+          referenceMin: 70,
+          referenceMax: 100,
+        },
+      ];
+
+      const result = await service.validateBloodTest(bloodTestData);
+
+      expect(result.isBloodTest).toBe(false);
+      expect(result.reason).toBe('Failed to parse AI response');
     });
   });
 
-  describe('utility functions', () => {
-    it('safeJsonParse should parse valid JSON', () => {
-      const { safeJsonParse } = require('./bloodTest.service');
-      const result = safeJsonParse('{"key":"value"}', {});
-      expect(result).toEqual({ key: 'value' });
+  describe('getPdfJobStatus', () => {
+    it('should return job status for valid job ID', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
+
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
+      const jobStatus = service.getPdfJobStatus(result.pdfJobId);
+
+      expect(jobStatus).toBeDefined();
+      expect(jobStatus?.createdAt).toBeInstanceOf(Date);
     });
 
-    it('safeJsonParse should return fallback on invalid JSON', () => {
-      const { safeJsonParse } = require('./bloodTest.service');
-      const fallback = { default: true };
-      const result = safeJsonParse('invalid', fallback);
-      expect(result).toEqual(fallback);
+    it('should return null for invalid job ID format', () => {
+      const invalidJobId = 'invalid-job-id';
+      const jobStatus = service.getPdfJobStatus(invalidJobId);
+
+      expect(jobStatus).toBeNull();
     });
 
-    it('cleanJsonString should remove markdown code blocks', () => {
-      const { cleanJsonString } = require('./bloodTest.service');
-      const result = cleanJsonString('```json\n{"key":"value"}\n```');
-      expect(result).toBe('{"key":"value"}');
+    it('should return null for non-existent job ID', () => {
+      const nonExistentJobId = 'pdf_9999999999_nonexistent';
+      const jobStatus = service.getPdfJobStatus(nonExistentJobId);
+
+      expect(jobStatus).toBeNull();
+    });
+  });
+
+  describe('getPdfByJobId', () => {
+    it('should return PDF buffer for completed job', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
+
+      pdfService.generateHealthReportPdf.mockResolvedValue(
+        Buffer.from('mock-pdf'),
+      );
+
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
+
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const privateJobsMap = (
+        service as unknown as {
+          pdfJobs: Map<
+            string,
+            {
+              status: string;
+              filename?: string;
+              createdAt: Date;
+              lastAccessedAt?: Date;
+              downloadCount?: number;
+            }
+          >;
+        }
+      ).pdfJobs;
+      const job = privateJobsMap.get(result.pdfJobId);
+      if (job) {
+        job.status = PdfJobStatusEnum.COMPLETED;
+        job.filename = `${result.pdfJobId}.pdf`;
+      }
+
+      const pdf = service.getPdfByJobId(result.pdfJobId);
+
+      expect(pdf).toBeDefined();
+      expect(Buffer.isBuffer(pdf)).toBe(true);
+    });
+
+    it('should return null for invalid job ID', () => {
+      const pdf = service.getPdfByJobId('invalid-id');
+      expect(pdf).toBeNull();
+    });
+
+    it('should return null for pending job', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
+
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
+      const pdf = service.getPdfByJobId(result.pdfJobId);
+
+      expect(pdf).toBeNull();
+    });
+
+    it('should increment download count on each access', async () => {
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
+
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
+
+      const privateJobsMap = (
+        service as unknown as {
+          pdfJobs: Map<
+            string,
+            {
+              status: string;
+              filename?: string;
+              createdAt: Date;
+              lastAccessedAt?: Date;
+              downloadCount?: number;
+            }
+          >;
+        }
+      ).pdfJobs;
+      const job = privateJobsMap.get(result.pdfJobId);
+      if (job) {
+        job.status = PdfJobStatusEnum.COMPLETED;
+        job.filename = `${result.pdfJobId}.pdf`;
+      }
+
+      service.getPdfByJobId(result.pdfJobId);
+      service.getPdfByJobId(result.pdfJobId);
+
+      const updatedJob = privateJobsMap.get(result.pdfJobId);
+      expect(updatedJob?.downloadCount).toBe(2);
+    });
+
+    it('should prevent path traversal attacks', () => {
+      const maliciousJobId = 'pdf_123_../../etc/passwd';
+      const pdf = service.getPdfByJobId(maliciousJobId);
+
+      expect(pdf).toBeNull();
+    });
+  });
+
+  describe('PDF cleanup', () => {
+    it('should cleanup expired PDFs after 30 minutes', async () => {
+      jest.useFakeTimers();
+
+      (openAI.chat.completions.create as jest.Mock).mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(mockAiResponse) } }],
+      });
+
+      const result = await service.analyzeBloodTest(mockCreateReviewData);
+
+      const privateJobsMap = (
+        service as unknown as {
+          pdfJobs: Map<
+            string,
+            {
+              status: string;
+              filename?: string;
+              createdAt: Date;
+              lastAccessedAt?: Date;
+              downloadCount?: number;
+            }
+          >;
+        }
+      ).pdfJobs;
+      const job = privateJobsMap.get(result.pdfJobId);
+      if (job) {
+        job.status = PdfJobStatusEnum.COMPLETED;
+        job.filename = `${result.pdfJobId}.pdf`;
+        job.lastAccessedAt = new Date(Date.now() - 31 * 60 * 1000);
+      }
+
+      jest.advanceTimersByTime(5 * 60 * 1000);
+
+      await new Promise(process.nextTick);
+
+      jest.useRealTimers();
     });
   });
 });

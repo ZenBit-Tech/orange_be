@@ -125,10 +125,46 @@ export class PdfService {
           (inputData.medicationGuidance &&
             analysisResult.drugsRecommendations) ||
           (inputData.exerciseGuidelines &&
-            analysisResult.exerciseRecommendations);
+            analysisResult.exerciseRecommendations) ||
+          (inputData.additionalQuestions &&
+            analysisResult.userQuestionResponse);
 
-        const totalPages =
-          1 + markerPages.length + (hasRecommendations ? 1 : 0);
+        const recommendationsHeight = hasRecommendations
+          ? this.calculateRecommendationsHeight(doc, inputData, analysisResult)
+          : 0;
+
+        const lastPageMarkerCount =
+          markerPages.length > 0
+            ? markerPages[markerPages.length - 1].length
+            : page1Markers.length;
+
+        const headerSpace = 50 + 25;
+        const footerSpace = 60;
+        const markerTableHeaderSpace = 30;
+        const markerRowHeight = 40;
+        const tableBottomBorder = 0;
+        const spacingBeforeRecommendations = 25;
+
+        const lastPageMarkersHeight =
+          markerTableHeaderSpace +
+          lastPageMarkerCount * markerRowHeight +
+          tableBottomBorder;
+
+        const lastPageUsedSpace =
+          headerSpace +
+          lastPageMarkersHeight +
+          spacingBeforeRecommendations +
+          footerSpace;
+
+        const lastPageAvailableSpace = this.PAGE_HEIGHT - lastPageUsedSpace;
+
+        const fitOnLastPage =
+          hasRecommendations &&
+          recommendationsHeight > 0 &&
+          lastPageAvailableSpace >= recommendationsHeight;
+
+        const needsNewPage = hasRecommendations && !fitOnLastPage;
+        const totalPages = 1 + markerPages.length + (needsNewPage ? 1 : 0);
 
         this.drawFirstPage(
           doc,
@@ -141,6 +177,7 @@ export class PdfService {
         );
 
         markerPages.forEach((markers, index) => {
+          const isLastMarkerPage = index === markerPages.length - 1;
           doc.addPage();
           this.drawMarkerPage(
             doc,
@@ -150,9 +187,29 @@ export class PdfService {
             index + 2,
             totalPages,
           );
+
+          if (isLastMarkerPage && fitOnLastPage && hasRecommendations) {
+            const headerSpace = 50 + 25;
+            const markerTableHeaderSpace = 30;
+            const markerRowHeight = 40;
+            const spacingBeforeRecommendations = 25;
+
+            const currentY =
+              headerSpace +
+              markerTableHeaderSpace +
+              markers.length * markerRowHeight +
+              spacingBeforeRecommendations;
+
+            this.drawRecommendationsSection(
+              doc,
+              inputData,
+              analysisResult,
+              currentY,
+            );
+          }
         });
 
-        if (hasRecommendations) {
+        if (needsNewPage) {
           doc.addPage();
           this.drawRecommendationsPage(
             doc,
@@ -169,6 +226,89 @@ export class PdfService {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
+  }
+
+  private calculateRecommendationsHeight(
+    doc: PDFKit.PDFDocument,
+    inputData: CreateReviewDataDto,
+    analysisResult: AiAnalysisResult,
+  ): number {
+    let totalHeight = 0;
+
+    totalHeight += 25 + 15;
+
+    if (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) {
+      totalHeight += this.calculateSectionHeight(
+        doc,
+        analysisResult.nutritionRecommendations.descriptions,
+      );
+    }
+
+    if (
+      inputData.supplementRecommendations &&
+      analysisResult.supplementsRecommendations
+    ) {
+      totalHeight += this.calculateSectionHeight(
+        doc,
+        analysisResult.supplementsRecommendations.descriptions,
+      );
+    }
+
+    if (inputData.medicationGuidance && analysisResult.drugsRecommendations) {
+      totalHeight += this.calculateSectionHeight(
+        doc,
+        analysisResult.drugsRecommendations.descriptions,
+      );
+    }
+
+    if (
+      inputData.exerciseGuidelines &&
+      analysisResult.exerciseRecommendations
+    ) {
+      totalHeight += this.calculateSectionHeight(
+        doc,
+        analysisResult.exerciseRecommendations.descriptions,
+      );
+    }
+
+    if (inputData.additionalQuestions && analysisResult.userQuestionResponse) {
+      const questionText = `"${analysisResult.userQuestionResponse.question}"`;
+      const answerText = analysisResult.userQuestionResponse.answer;
+
+      doc.fontSize(9).font('Inter-Italic');
+      const questionHeight = doc.heightOfString(questionText, {
+        width: this.CONTENT_WIDTH - 30,
+      });
+
+      doc.fontSize(9).font('Inter-Regular');
+      const answerHeight = doc.heightOfString(answerText, {
+        width: this.CONTENT_WIDTH - 30,
+      });
+
+      const boxHeight = 15 + 15 + questionHeight + 15 + 15 + answerHeight + 15;
+      totalHeight += 20 + boxHeight + 10;
+    }
+
+    return totalHeight;
+  }
+
+  private calculateSectionHeight(
+    doc: PDFKit.PDFDocument,
+    items: string[],
+  ): number {
+    let height = 18;
+
+    items.forEach((item) => {
+      doc.fontSize(8.5).font('Inter-Regular');
+      const itemHeight = doc.heightOfString(item, {
+        width: this.CONTENT_WIDTH - 42,
+        lineGap: 2,
+      });
+      height += itemHeight + 8;
+    });
+
+    height += 15;
+    return height;
   }
 
   private drawHeader(
@@ -381,36 +521,40 @@ export class PdfService {
     this.drawFooter(doc, pageNum, totalPages);
   }
 
-  private drawRecommendationsPage(
+  private drawRecommendationsSection(
     doc: PDFKit.PDFDocument,
-    logoBuffer: Buffer | null,
-    reportDate: string,
     inputData: CreateReviewDataDto,
     analysisResult: AiAnalysisResult,
-    totalPages: number,
+    startY: number,
   ) {
-    let currentY = this.MARGIN_Y;
+    let currentY = startY;
 
-    this.drawHeader(doc, logoBuffer, reportDate, currentY);
-    currentY += 50;
+    const hasActualRecommendations =
+      (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) ||
+      (inputData.supplementRecommendations &&
+        analysisResult.supplementsRecommendations) ||
+      (inputData.medicationGuidance && analysisResult.drugsRecommendations) ||
+      (inputData.exerciseGuidelines && analysisResult.exerciseRecommendations);
 
-    doc
-      .fontSize(10)
-      .fillColor('#080B08')
-      .font('Poppins-Regular')
-      .text('Your personalized recommendations', this.MARGIN_X, currentY, {
-        width: this.CONTENT_WIDTH,
-        align: 'center',
-      });
-    currentY += 25;
+    if (hasActualRecommendations) {
+      doc
+        .fontSize(10)
+        .fillColor('#080B08')
+        .font('Poppins-Regular')
+        .text('Your personalized recommendations', this.MARGIN_X, currentY, {
+          width: this.CONTENT_WIDTH,
+          align: 'center',
+        });
+      currentY += 25;
 
-    doc
-      .moveTo(this.MARGIN_X, currentY)
-      .lineTo(this.PAGE_WIDTH - this.MARGIN_X, currentY)
-      .strokeColor('#DCDCDC')
-      .lineWidth(1)
-      .stroke();
-    currentY += 15;
+      doc
+        .moveTo(this.MARGIN_X, currentY)
+        .lineTo(this.PAGE_WIDTH - this.MARGIN_X, currentY)
+        .strokeColor('#DCDCDC')
+        .lineWidth(1)
+        .stroke();
+      currentY += 15;
+    }
 
     if (inputData.nutritionAdvice && analysisResult.nutritionRecommendations) {
       currentY = this.drawRecommendationSection(
@@ -535,6 +679,22 @@ export class PdfService {
 
       currentY = boxY + boxHeight + 10;
     }
+  }
+
+  private drawRecommendationsPage(
+    doc: PDFKit.PDFDocument,
+    logoBuffer: Buffer | null,
+    reportDate: string,
+    inputData: CreateReviewDataDto,
+    analysisResult: AiAnalysisResult,
+    totalPages: number,
+  ) {
+    let currentY = this.MARGIN_Y;
+
+    this.drawHeader(doc, logoBuffer, reportDate, currentY);
+    currentY += 50;
+
+    this.drawRecommendationsSection(doc, inputData, analysisResult, currentY);
 
     this.drawFooter(doc, totalPages, totalPages);
   }

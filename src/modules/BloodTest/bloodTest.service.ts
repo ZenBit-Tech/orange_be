@@ -68,11 +68,18 @@ function chunkArray<T>(array: T[], size: number): T[][] {
   return result;
 }
 
+interface ExtendedPdfJobStatus extends PdfJobStatus {
+  lastAccessedAt?: Date;
+  downloadCount?: number;
+}
+
 @Injectable()
 export class BloodTestService {
   private readonly logger = new Logger(BloodTestService.name);
-  private readonly pdfJobs: LRUCache<string, PdfJobStatus>;
-  private readonly downloadedPdfs: Set<string>;
+  private readonly pdfJobs: LRUCache<string, ExtendedPdfJobStatus>;
+
+  private readonly PDF_MAX_AGE_MS = 30 * 60 * 1000;
+  private readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
   constructor(
     private readonly openAI: OpenAI,
@@ -80,18 +87,13 @@ export class BloodTestService {
   ) {
     this.pdfJobs = new LRUCache({
       max: 100,
-      ttl: 1000 * 60 * 15,
+      ttl: 1000 * 60 * 60,
       updateAgeOnGet: false,
     });
 
-    this.downloadedPdfs = new Set();
-
-    setInterval(
-      () => {
-        this.cleanupExpiredPdfs();
-      },
-      2 * 60 * 1000,
-    );
+    setInterval(() => {
+      this.cleanupExpiredPdfs();
+    }, this.CLEANUP_INTERVAL_MS);
   }
 
   async analyzeBloodTest(
@@ -162,6 +164,7 @@ export class BloodTestService {
       this.pdfJobs.set(pdfJobId, {
         status: PdfJobStatusEnum.PENDING,
         createdAt: new Date(),
+        downloadCount: 0,
       });
 
       this.generatePdfInBackground(testResults, finalResult, pdfJobId);
@@ -211,6 +214,8 @@ export class BloodTestService {
             status: PdfJobStatusEnum.COMPLETED,
             filename,
             createdAt: new Date(),
+            lastAccessedAt: new Date(),
+            downloadCount: 0,
           });
 
           this.logger.log(`PDF generated successfully: ${filename}`);
@@ -225,6 +230,7 @@ export class BloodTestService {
             status: PdfJobStatusEnum.FAILED,
             error: error instanceof Error ? error.message : 'Unknown error',
             createdAt: new Date(),
+            downloadCount: 0,
           });
         }
       })().catch((err) => {
@@ -284,11 +290,16 @@ export class BloodTestService {
       if (fs.existsSync(filepath)) {
         const buffer = fs.readFileSync(filepath);
 
-        this.downloadedPdfs.add(jobId);
+        const downloadCount = (job.downloadCount || 0) + 1;
+        this.pdfJobs.set(jobId, {
+          ...job,
+          lastAccessedAt: new Date(),
+          downloadCount,
+        });
 
-        setTimeout(() => {
-          this.deletePdf(jobId);
-        }, 5000);
+        this.logger.log(
+          `PDF accessed (${downloadCount} times): ${sanitizedFilename}`,
+        );
 
         return buffer;
       }
@@ -319,12 +330,13 @@ export class BloodTestService {
 
         if (fs.existsSync(filepath)) {
           fs.unlinkSync(filepath);
-          this.logger.log(`PDF deleted: ${sanitizedFilename}`);
+          this.logger.log(
+            `PDF deleted: ${sanitizedFilename} (downloaded ${job.downloadCount || 0} times)`,
+          );
         }
       }
 
       this.pdfJobs.delete(jobId);
-      this.downloadedPdfs.delete(jobId);
     } catch (error) {
       this.logger.error(`Error deleting PDF for job ${jobId}:`, error);
     }
@@ -333,12 +345,12 @@ export class BloodTestService {
   private cleanupExpiredPdfs(): void {
     const now = Date.now();
     const expiredJobs: string[] = [];
-    const MAX_AGE_MS = 10 * 60 * 1000;
 
     this.pdfJobs.forEach((job, jobId) => {
-      const age = now - job.createdAt.getTime();
+      const lastAccessTime = job.lastAccessedAt || job.createdAt;
+      const age = now - lastAccessTime.getTime();
 
-      if (this.downloadedPdfs.has(jobId) || age > MAX_AGE_MS) {
+      if (age > this.PDF_MAX_AGE_MS) {
         expiredJobs.push(jobId);
       }
     });
@@ -348,7 +360,7 @@ export class BloodTestService {
     });
 
     if (expiredJobs.length > 0) {
-      this.logger.log(`Cleaned up ${expiredJobs.length} PDFs`);
+      this.logger.log(`Cleaned up ${expiredJobs.length} expired PDFs`);
     }
 
     if (global.gc && expiredJobs.length > 0) {
