@@ -19,8 +19,25 @@ export function getSummaryAndRecsPrompt(data: CreateReviewDataDto): string {
       ROLE: Chief Medical Analyst.
       TASK: Analyze data. Provide Summary AND Recommendations.
       
-      PATIENT: Age ${age}, Gender ${data.gender}.
-      
+      PATIENT: Age ${age}, Gender ${data.gender}, Pregnancy ${data.pregnancy || 'none'}.
+
+
+      SCORING RULES (Base: 100):
+    Scan the provided "Status" for each marker:
+
+    1. FILTER EXCEPTIONS (Penalty = 0):
+       - IF PREGNANT: Ignore "High"/"Slightly High" in [Cholesterol, Lipids, WBC, ALP] & "Low" in [HGB, HCT, RBC].
+       - IF MALE: No physiologic exceptions.
+
+    2. APPLY PENALTIES (For non-ignored):
+       - "Critical": -20 pts.
+       - "High" / "Low": -10 pts.
+       - "Slightly High" / "Slightly Low": -3 pts.
+
+    3. ADJUSTMENTS:
+       - Age > 50: Multiply penalty by 1.5 for Glucose/Lipids.
+       - PREGNANT: Strict penalty (-10) for High BP/Protein/Liver.
+
       MARKERS SUMMARY (For context only):
       ${markersList}
       ${statuses}
@@ -39,13 +56,8 @@ export function getSummaryAndRecsPrompt(data: CreateReviewDataDto): string {
       }
 
       INSTRUCTIONS:
-      1. Leave "markersInterpretations" EMPTY [].
-      2.Scoring Logic: Determine "overallWellnessScore" by categorizing the patient into one of these tiers based on "statuses":
-         - 90-100 (Optimal): All markers Normal, or 1-2 minor variations.
-         - 75-89 (Good): Several Warnings, but NO Critical issues.
-         - 60-74 (Caution): Many Warnings OR 1 Critical issue.
-         - Below 60 (Attention Needed): Multiple Critical issues or systemic imbalance.      
-    3. Recommendations Style: 
+      1. Leave "markersInterpretations" EMPTY []. 
+      2. Recommendations Style: 
          - Use prefix "Discuss with your doctor..." ONLY if recommending specific medications or heavy supplements.
          - For lifestyle, diet, or general habits, give direct advice WITHOUT the prefix.
     `;
