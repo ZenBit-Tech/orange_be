@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import PDFDocument from 'pdfkit';
 import axios from 'axios';
-import { PdfService } from './pdf.service';
+import { PdfService } from '../pdf.service';
 import { AiAnalysisResult } from '@common/interfaces/analysis-result.interface';
 import { CreateReviewDataDto } from '@modules/marker/dto/review-data.dto';
 

@@ -4,9 +4,9 @@ jest.mock('pdf-to-img', () => ({
   pdf: jest.fn(),
 }));
 import { Test, TestingModule } from '@nestjs/testing';
-import { OcrController } from './ocr.controller';
-import { OcrService } from './ocr.service';
-import { CreateOcrDto } from './dto/create.dto';
+import { OcrController } from '../ocr.controller';
+import { OcrService } from '../ocr.service';
+import { CreateOcrDto } from '../dto/create.dto';
 import { BloodTestData } from '@common/interfaces/blood-test-data.interface';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';

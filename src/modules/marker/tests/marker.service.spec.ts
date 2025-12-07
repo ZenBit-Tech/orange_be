@@ -1,11 +1,11 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
-import { MarkerService } from './marker.service';
+import { MarkerService } from '../marker.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Marker } from './entities/marker.entity';
-import { CreateMarkerDto, UpdateMarkerDto } from './dto/marker.dto';
-import { CreateReviewDataDto } from './dto/review-data.dto';
+import { Marker } from '../entities/marker.entity';
+import { CreateMarkerDto, UpdateMarkerDto } from '../dto/marker.dto';
+import { CreateReviewDataDto } from '../dto/review-data.dto';
 import {
   NotFoundException,
   InternalServerErrorException,

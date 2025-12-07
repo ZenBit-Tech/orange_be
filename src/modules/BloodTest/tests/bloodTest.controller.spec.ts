@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
-import { BloodTestController } from './bloodTest.controller';
-import { BloodTestService } from './bloodTest.service';
+import { BloodTestController } from '../bloodTest.controller';
+import { BloodTestService } from '../bloodTest.service';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtService } from '@nestjs/jwt';

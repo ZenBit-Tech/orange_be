@@ -1,7 +1,7 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthController } from '../auth.controller';
+import { AuthService } from '../auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
@@ -106,7 +106,7 @@ describe('AuthController', () => {
         user: mockUser,
       });
 
-      controller.googleCallback(
+      await controller.googleCallback(
         mockRequest as GoogleCallbackRequest,
         mockResponse as Response,
       );
@@ -123,7 +123,7 @@ describe('AuthController', () => {
     it('should redirect with error when user is not found in request', async () => {
       mockRequest.user = null;
 
-      controller.googleCallback(
+      await controller.googleCallback(
         mockRequest as GoogleCallbackRequest,
         mockResponse as Response,
       );
@@ -135,13 +135,13 @@ describe('AuthController', () => {
     });
 
     it('should redirect with error when FRONTEND_URL is not defined', async () => {
-      configService.get.mockReturnValueOnce(undefined);
+      configService.get.mockReturnValue(undefined);
       authService.findOrCreateUser.mockResolvedValue({
         accessToken: 'token',
         user: mockUser,
       });
 
-      controller.googleCallback(
+      await controller.googleCallback(
         mockRequest as GoogleCallbackRequest,
         mockResponse as Response,
       );
@@ -152,11 +152,12 @@ describe('AuthController', () => {
     });
 
     it('should handle errors during authentication', async () => {
+      configService.get.mockReturnValue('http://localhost:3000');
       authService.findOrCreateUser.mockRejectedValue(
         new Error('Database error'),
       );
 
-      controller.googleCallback(
+      await controller.googleCallback(
         mockRequest as GoogleCallbackRequest,
         mockResponse as Response,
       );

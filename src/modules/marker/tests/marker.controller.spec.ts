@@ -1,10 +1,10 @@
 /* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
-import { MarkerController } from './marker.controller';
-import { MarkerService } from './marker.service';
-import { CreateMarkerDto, UpdateMarkerDto } from './dto/marker.dto';
-import { Marker } from './entities/marker.entity';
-import { CreateReviewDataDto } from './dto/review-data.dto';
+import { MarkerController } from '../marker.controller';
+import { MarkerService } from '../marker.service';
+import { CreateMarkerDto, UpdateMarkerDto } from '../dto/marker.dto';
+import { Marker } from '../entities/marker.entity';
+import { CreateReviewDataDto } from '../dto/review-data.dto';
 
 describe('MarkerController', () => {
   let controller: MarkerController;
