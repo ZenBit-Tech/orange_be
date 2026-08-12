@@ -1,0 +1,35 @@
+name: Deploy to Heroku
+
+# Deploys to Heroku through the app's git remote. This replaces the dashboard
+# Heroku<->GitHub integration, which was tied to a single person's OAuth session
+# and breaks when that account is closed.
+#
+# Required repository secret: HEROKU_API_KEY
+
+on:
+  push:
+    branches:
+      - develop
+
+concurrency:
+  group: deploy-orange-team
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: |
+          if [ -z "$HEROKU_API_KEY" ]; then
+            echo "HEROKU_API_KEY secret is not set"
+            exit 1
+          fi
+          git push --force "https://heroku:$HEROKU_API_KEY@git.heroku.com/orange-team.git" HEAD:refs/heads/main
